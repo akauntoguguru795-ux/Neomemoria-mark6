@@ -1,5 +1,5 @@
 /* ============================================================
-   VocabFlash - Complete Frontend Application
+   Neomemoria - Complete Frontend Application
    ============================================================ */
 
 // ===== State Management =====
@@ -15,8 +15,8 @@ const State = {
   currentProgress: {},
   studyQueue: [],
   studyIndex: 0,
-  studyMode: 'normal', // normal, simple, oni
-  orderMode: 'srs', // srs, random, sequential
+  studyMode: 'normal',
+  orderMode: 'srs',
   isFlipped: false,
   sessionStart: null,
   sessionCards: 0,
@@ -44,9 +44,7 @@ const API = {
       return data;
     } catch (e) {
       if (e.message === 'Unauthorized') {
-        State.user = null;
-        State.token = null;
-        localStorage.removeItem('vf_token');
+        State.user = null; State.token = null; localStorage.removeItem('vf_token');
       }
       throw e;
     }
@@ -100,8 +98,7 @@ async function initAuth() {
 
 async function login(username, password) {
   const data = await API.post('/auth/login', { username, password });
-  State.token = data.token;
-  State.user = data.user;
+  State.token = data.token; State.user = data.user;
   localStorage.setItem('vf_token', data.token);
   showToast('ログイン成功!', 'success');
   navigate('home');
@@ -109,36 +106,26 @@ async function login(username, password) {
 
 async function register(username, password, displayName) {
   const data = await API.post('/auth/register', { username, password, displayName });
-  State.token = data.token;
-  State.user = data.user;
+  State.token = data.token; State.user = data.user;
   localStorage.setItem('vf_token', data.token);
   showToast('アカウント作成完了!', 'success');
   navigate('home');
 }
 
 function logout() {
-  State.user = null;
-  State.token = null;
-  localStorage.removeItem('vf_token');
+  State.user = null; State.token = null; localStorage.removeItem('vf_token');
   showToast('ログアウトしました', 'info');
   navigate('home');
 }
 
-// ===== Local Progress (for anonymous users) =====
+// ===== Local Progress =====
 const LocalProgress = {
   getKey(cardId) { return `vf_prog_${cardId}`; },
-  get(cardId) {
-    try { return JSON.parse(localStorage.getItem(this.getKey(cardId))) || null; } catch { return null; }
-  },
-  set(cardId, data) {
-    localStorage.setItem(this.getKey(cardId), JSON.stringify(data));
-  },
-  getAll(deckId) {
+  get(cardId) { try { return JSON.parse(localStorage.getItem(this.getKey(cardId))) || null; } catch { return null; } },
+  set(cardId, data) { localStorage.setItem(this.getKey(cardId), JSON.stringify(data)); },
+  getAll() {
     const progress = {};
-    State.currentCards.forEach(card => {
-      const p = this.get(card.id);
-      if (p) progress[card.id] = p;
-    });
+    State.currentCards.forEach(card => { const p = this.get(card.id); if (p) progress[card.id] = p; });
     return progress;
   }
 };
@@ -147,10 +134,10 @@ const LocalProgress = {
 function getNextReview(status) {
   const now = new Date();
   switch (status) {
-    case 'mastered': return null; // Never show again
-    case 'good': return new Date(now.getTime() + 2 * 86400000).toISOString(); // 2 days
-    case 'unsure': return new Date(now.getTime() + 1 * 86400000).toISOString(); // 1 day
-    case 'forgot': return 'forgot'; // Special: 20 cards later
+    case 'mastered': return null;
+    case 'good': return new Date(now.getTime() + 2 * 86400000).toISOString();
+    case 'unsure': return new Date(now.getTime() + 1 * 86400000).toISOString();
+    case 'forgot': return 'forgot';
     default: return now.toISOString();
   }
 }
@@ -158,31 +145,17 @@ function getNextReview(status) {
 function buildStudyQueue(cards, progress, mode = 'srs') {
   let queue = cards.filter(c => {
     const p = progress[c.id];
-    if (!p) return true; // Unseen cards
+    if (!p) return true;
     if (p.status === 'mastered') return false;
     return true;
   });
-
-  if (mode === 'sequential') {
-    return queue.sort((a, b) => a.sort_order - b.sort_order);
-  }
-
-  if (mode === 'random') {
-    return shuffleArray([...queue]);
-  }
-
-  // SRS mode: sort by next_review (earliest first), unseen first on first time
+  if (mode === 'sequential') return queue.sort((a, b) => a.sort_order - b.sort_order);
+  if (mode === 'random') return shuffleArray([...queue]);
   const now = new Date().toISOString();
   const unseenCards = queue.filter(c => !progress[c.id]);
   const reviewCards = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review <= now);
   const futureCards = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review > now);
-
-  // First session: shuffle unseen cards
-  if (unseenCards.length === queue.length) {
-    return shuffleArray(unseenCards);
-  }
-
-  // Mix: due cards first, then unseen (shuffled), then future
+  if (unseenCards.length === queue.length) return shuffleArray(unseenCards);
   reviewCards.sort((a, b) => (progress[a.id]?.next_review || '').localeCompare(progress[b.id]?.next_review || ''));
   return [...reviewCards, ...shuffleArray(unseenCards), ...futureCards];
 }
@@ -199,22 +172,14 @@ function shuffleArray(arr) {
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const cards = [];
-  
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    
-    // Parse CSV properly handling quoted fields
     const fields = parseCSVLine(line);
     if (fields.length < 2) continue;
-    
-    // Skip header row if detected
     if (i === 0 && (fields[0].toLowerCase() === 'no' || fields[0].toLowerCase() === 'number' || fields[0].toLowerCase() === '番号')) continue;
-    
-    // Try to detect format: No,Word,Meaning,Example,Translation,Emoji
     let startIdx = 0;
     if (fields.length >= 3 && /^\d+$/.test(fields[0].trim())) startIdx = 1;
-    
     const card = {
       word: (fields[startIdx] || '').trim(),
       meaning: (fields[startIdx + 1] || '').trim(),
@@ -222,28 +187,18 @@ function parseCSV(text) {
       example_translation: (fields[startIdx + 3] || '').trim(),
       emoji: (fields[startIdx + 4] || '').trim(),
     };
-    
     if (card.word && card.meaning) cards.push(card);
   }
   return cards;
 }
 
 function parseCSVLine(line) {
-  const fields = [];
-  let current = '';
-  let inQuotes = false;
-  
+  const fields = []; let current = ''; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if ((ch === ',' || ch === '\t') && !inQuotes) {
-      fields.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
+    if (ch === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
+    else if ((ch === ',' || ch === '\t') && !inQuotes) { fields.push(current); current = ''; }
+    else { current += ch; }
   }
   fields.push(current);
   return fields;
@@ -254,7 +209,6 @@ function getProgress(cardId) {
   if (State.user) return State.currentProgress[cardId] || null;
   return LocalProgress.get(cardId);
 }
-
 function getAllProgress() {
   if (State.user) return State.currentProgress;
   return LocalProgress.getAll();
@@ -269,31 +223,27 @@ async function saveProgress(cardId, deckId, status) {
     review_count: (getProgress(cardId)?.review_count || 0) + 1,
     correct_count: (getProgress(cardId)?.correct_count || 0) + (status === 'mastered' || status === 'good' ? 1 : 0),
   };
-
   if (State.user) {
     State.currentProgress[cardId] = progressData;
-    try {
-      await API.post('/progress', { cardId, deckId, status, nextReview: progressData.next_review });
-    } catch { /* save locally as fallback */ }
+    try { await API.post('/progress', { cardId, deckId, status, nextReview: progressData.next_review }); } catch {}
   } else {
     LocalProgress.set(cardId, progressData);
   }
 }
 
-// ===== Streak Calculation =====
+// ===== Streak =====
 function getStreakInfo(streak) {
-  if (streak >= 30) return { emoji: '🏆', label: 'レジェンド', class: 'streak-sparkle' };
-  if (streak >= 14) return { emoji: '👑', label: 'キング', class: '' };
-  if (streak >= 7) return { emoji: '⚡', label: 'サンダー', class: '' };
-  if (streak >= 3) return { emoji: '🔥', label: 'ファイヤー', class: '' };
-  return { emoji: '📚', label: 'スタート', class: '' };
+  if (streak >= 30) return { emoji: '🏆', label: 'レジェンド', cls: 'streak-sparkle' };
+  if (streak >= 14) return { emoji: '👑', label: 'キング', cls: '' };
+  if (streak >= 7) return { emoji: '⚡', label: 'サンダー', cls: '' };
+  if (streak >= 3) return { emoji: '🔥', label: 'ファイヤー', cls: '' };
+  return { emoji: '📚', label: 'スタート', cls: '' };
 }
 
 // ===== Render Engine =====
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
-
   let html = '';
   switch (State.currentView) {
     case 'home': html = renderHome(); break;
@@ -309,7 +259,6 @@ function render() {
     case 'publish': html = renderPublish(); break;
     default: html = renderHome();
   }
-
   app.innerHTML = renderHeader() + html;
   attachEventListeners();
 }
@@ -318,11 +267,11 @@ function renderHeader() {
   return `
     <header class="header">
       <div class="logo" onclick="navigate('home')">
-        <div class="logo-icon"><i class="fas fa-bolt"></i></div>
-        <span>VocabFlash</span>
+        <div class="logo-icon"><i class="fas fa-brain"></i></div>
+        <span>Neomemoria</span>
       </div>
       <div class="header-actions">
-        ${State.user ? `<span style="font-size:0.78rem;color:var(--text-secondary);margin-right:4px;">${State.user.displayName || State.user.username}</span>` : ''}
+        ${State.user ? `<span class="header-user">${State.user.displayName || State.user.username}</span>` : ''}
         <button class="btn-icon btn-ghost" onclick="toggleMenu()" aria-label="メニュー">
           <i class="fas fa-bars"></i>
         </button>
@@ -341,13 +290,13 @@ function renderMenu() {
           <div class="menu-user">
             <div class="menu-avatar">${(State.user.displayName || State.user.username || 'U')[0].toUpperCase()}</div>
             <div>
-              <div style="font-weight:600;font-size:0.95rem;">${State.user.displayName || State.user.username}</div>
+              <div style="font-weight:700;font-size:0.95rem;">${State.user.displayName || State.user.username}</div>
               <div style="font-size:0.78rem;color:var(--text-tertiary);">@${State.user.username}</div>
             </div>
           </div>
         ` : `
           <div style="text-align:center;">
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:8px;">ゲストモード</div>
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:10px;">ゲストモード</div>
             <button class="btn btn-primary btn-sm" onclick="navigate('auth');toggleMenu();" style="width:100%;">
               <i class="fas fa-sign-in-alt"></i> ログイン / 登録
             </button>
@@ -371,143 +320,104 @@ function renderMenu() {
   `;
 }
 
-function toggleMenu() {
-  State.menuOpen = !State.menuOpen;
-  render();
-}
+function toggleMenu() { State.menuOpen = !State.menuOpen; render(); }
 
-// ===== Home View =====
+// ===== Home =====
 function renderHome() {
   return `
-    <div class="fade-in" style="padding-top:8px;">
-      <div style="text-align:center;margin-bottom:28px;">
-        <h1 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:6px;">英単語を、確実に覚える。</h1>
-        <p style="font-size:0.88rem;color:var(--text-secondary);">科学的な間隔反復で効率的に学習</p>
+    <div class="fade-in" style="padding-top:4px;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <h1 style="font-size:1.5rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:4px;">英単語を、確実に覚える。</h1>
+        <p style="font-size:0.85rem;color:var(--text-secondary);">科学的な間隔反復で効率的に学習</p>
       </div>
-      
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
-        <button class="btn btn-lg btn-primary" onclick="navigate('browse')" style="flex-direction:column;padding:24px 16px;">
-          <i class="fas fa-globe" style="font-size:1.5rem;margin-bottom:6px;"></i>
-          <span style="font-size:0.85rem;">公開単語帳</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <button class="btn btn-lg btn-primary" onclick="navigate('browse')" style="flex-direction:column;padding:22px 14px;">
+          <i class="fas fa-globe" style="font-size:1.4rem;margin-bottom:4px;"></i>
+          <span style="font-size:0.82rem;">公開単語帳</span>
         </button>
-        <button class="btn btn-lg" onclick="navigate('mydecks')" style="flex-direction:column;padding:24px 16px;">
-          <i class="fas fa-book" style="font-size:1.5rem;margin-bottom:6px;"></i>
-          <span style="font-size:0.85rem;">マイ単語帳</span>
-        </button>
-      </div>
-      
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
-        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:20px 16px;">
-          <i class="fas fa-file-import" style="font-size:1.2rem;margin-bottom:4px;"></i>
-          <span style="font-size:0.82rem;">CSVインポート</span>
-        </button>
-        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:20px 16px;">
-          <i class="fas fa-chart-bar" style="font-size:1.2rem;margin-bottom:4px;"></i>
-          <span style="font-size:0.82rem;">統計情報</span>
+        <button class="btn btn-lg" onclick="navigate('mydecks')" style="flex-direction:column;padding:22px 14px;">
+          <i class="fas fa-book" style="font-size:1.4rem;margin-bottom:4px;"></i>
+          <span style="font-size:0.82rem;">マイ単語帳</span>
         </button>
       </div>
-
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:18px 14px;">
+          <i class="fas fa-file-import" style="font-size:1.1rem;margin-bottom:3px;"></i>
+          <span style="font-size:0.8rem;">CSVインポート</span>
+        </button>
+        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:18px 14px;">
+          <i class="fas fa-chart-bar" style="font-size:1.1rem;margin-bottom:3px;"></i>
+          <span style="font-size:0.8rem;">統計情報</span>
+        </button>
+      </div>
       ${!State.user ? `
-        <div class="card" style="text-align:center;margin-top:12px;">
-          <p style="font-size:0.88rem;color:var(--text-secondary);margin-bottom:12px;">
-            ログインすると、学習進捗がサーバーに保存されます
-          </p>
-          <button class="btn btn-primary btn-sm" onclick="navigate('auth')">
-            <i class="fas fa-user-plus"></i> 無料登録 / ログイン
-          </button>
+        <div class="card" style="text-align:center;">
+          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px;">ログインすると学習進捗がサーバーに保存されます</p>
+          <button class="btn btn-primary btn-sm" onclick="navigate('auth')"><i class="fas fa-user-plus"></i> 無料登録 / ログイン</button>
         </div>
       ` : ''}
     </div>
   `;
 }
 
-// ===== Browse Public Decks =====
+// ===== Browse =====
 function renderBrowse() {
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">公開単語帳</h2>
       </div>
-      
       <div class="search-bar">
         <div class="search-wrapper">
           <i class="fas fa-search"></i>
-          <input type="text" class="search-input" placeholder="単語帳名、作成者、単語を検索..." 
-                 value="${State.searchQuery}" onkeyup="handleSearch(event)" id="search-input">
+          <input type="text" class="search-input" placeholder="単語帳名、作成者、単語を検索..." value="${State.searchQuery}" onkeyup="handleSearch(event)" id="search-input">
         </div>
       </div>
-      
-      <div id="deck-list" class="deck-list">
-        <div class="loading"><div class="spinner"></div></div>
-      </div>
+      <div id="deck-list" class="deck-list"><div class="loading"><div class="spinner"></div></div></div>
     </div>
   `;
 }
 
 let searchTimeout = null;
-function handleSearch(e) {
-  State.searchQuery = e.target.value;
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => loadPublicDecks(), 400);
-}
+function handleSearch(e) { State.searchQuery = e.target.value; clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadPublicDecks(), 400); }
 
 async function loadPublicDecks() {
   const container = document.getElementById('deck-list');
   if (!container) return;
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  
   try {
     const q = State.searchQuery ? `?q=${encodeURIComponent(State.searchQuery)}` : '';
     const data = await API.get(`/decks/public${q}`);
-    
     if (!data.decks || data.decks.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          <div class="empty-text">単語帳が見つかりません</div>
-          <div class="empty-sub">検索条件を変えるか、新しい単語帳を作成しましょう</div>
-        </div>
-      `;
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">単語帳が見つかりません</div></div>`;
       return;
     }
-    
     container.innerHTML = data.decks.map(deck => `
       <div class="deck-item" onclick="openDeck('${deck.id}')">
         <div class="deck-icon"><i class="fas fa-layer-group"></i></div>
         <div class="deck-info">
           <div class="deck-name">${escapeHtml(deck.name)}</div>
-          <div class="deck-meta">
-            <span>${escapeHtml(deck.author_name)}</span> · 
-            <span>${deck.card_count || deck.actual_count || 0}語</span> · 
-            <span>${formatDate(deck.created_at)}</span>
-          </div>
+          <div class="deck-meta">${escapeHtml(deck.author_name)} · ${deck.card_count || deck.actual_count || 0}語 · ${formatDate(deck.created_at)}</div>
         </div>
-        <i class="fas fa-chevron-right" style="color:var(--text-tertiary);"></i>
+        <i class="fas fa-chevron-right" style="color:var(--text-tertiary);font-size:0.8rem;"></i>
       </div>
     `).join('');
-  } catch (e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">読み込みエラー</div></div>`;
-  }
+  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">読み込みエラー</div></div>`; }
 }
 
 // ===== My Decks =====
 function renderMyDecks() {
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="page-title-row">
         <div style="display:flex;align-items:center;gap:10px;">
           <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
           <h2 class="section-title" style="margin:0;">マイ単語帳</h2>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="navigate('import')">
-          <i class="fas fa-plus"></i> 追加
-        </button>
+        <button class="btn btn-primary btn-sm" onclick="navigate('import')"><i class="fas fa-plus"></i> 追加</button>
       </div>
-      
-      <div id="my-deck-list" class="deck-list">
-        <div class="loading"><div class="spinner"></div></div>
-      </div>
+      <div id="my-deck-list" class="deck-list"><div class="loading"><div class="spinner"></div></div></div>
     </div>
   `;
 }
@@ -515,47 +425,24 @@ function renderMyDecks() {
 async function loadMyDecks() {
   const container = document.getElementById('my-deck-list');
   if (!container) return;
-  
   if (!State.user) {
-    // Load from localStorage for anonymous users
     const localDecks = JSON.parse(localStorage.getItem('vf_local_decks') || '[]');
     if (localDecks.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📚</div>
-          <div class="empty-text">単語帳がありません</div>
-          <div class="empty-sub">CSVをインポートして単語帳を作成しましょう</div>
-          <button class="btn btn-primary" onclick="navigate('import')" style="margin-top:16px;">
-            <i class="fas fa-file-import"></i> インポート
-          </button>
-        </div>
-      `;
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
       return;
     }
     container.innerHTML = localDecks.map(deck => renderDeckItem(deck, true)).join('');
     return;
   }
-  
   try {
     const data = await API.get('/decks/mine');
     if (!data.decks || data.decks.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📚</div>
-          <div class="empty-text">単語帳がありません</div>
-          <div class="empty-sub">CSVをインポートして単語帳を作成しましょう</div>
-          <button class="btn btn-primary" onclick="navigate('import')" style="margin-top:16px;">
-            <i class="fas fa-file-import"></i> インポート
-          </button>
-        </div>
-      `;
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
       return;
     }
     State.myDecks = data.decks;
     container.innerHTML = data.decks.map(deck => renderDeckItem(deck, true)).join('');
-  } catch (e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`;
-  }
+  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
 }
 
 function renderDeckItem(deck, showActions = false) {
@@ -565,18 +452,12 @@ function renderDeckItem(deck, showActions = false) {
       <div class="deck-icon" onclick="openDeck('${deck.id}')"><i class="fas fa-layer-group"></i></div>
       <div class="deck-info" onclick="openDeck('${deck.id}')">
         <div class="deck-name">${escapeHtml(deck.name)}</div>
-        <div class="deck-meta">
-          ${deck.card_count || 0}語 · ${deck.is_public ? '🌐 公開' : '🔒 非公開'} · ${formatDate(deck.updated_at || deck.created_at)}
-        </div>
+        <div class="deck-meta">${deck.card_count || 0}語 · ${deck.is_public ? '🌐 公開' : '🔒 非公開'} · ${formatDate(deck.updated_at || deck.created_at)}</div>
       </div>
       ${showActions && isOwner ? `
         <div class="deck-actions">
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${escapeHtml(deck.name)}')" title="名前変更">
-            <i class="fas fa-pen" style="font-size:0.75rem;"></i>
-          </button>
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${escapeHtml(deck.name)}')" title="削除" style="color:var(--danger);">
-            <i class="fas fa-trash" style="font-size:0.75rem;"></i>
-          </button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${escapeHtml(deck.name)}')" title="名前変更"><i class="fas fa-pen" style="font-size:0.72rem;"></i></button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${escapeHtml(deck.name)}')" title="削除" style="color:var(--danger);"><i class="fas fa-trash" style="font-size:0.72rem;"></i></button>
         </div>
       ` : ''}
     </div>
@@ -585,83 +466,51 @@ function renderDeckItem(deck, showActions = false) {
 
 // ===== Deck View =====
 async function openDeck(deckId) {
-  State.currentDeck = null;
-  State.currentCards = [];
+  State.currentDeck = null; State.currentCards = [];
   navigate('deck-view');
-  
   try {
     const data = await API.get(`/decks/${deckId}`);
-    State.currentDeck = data.deck;
-    State.currentCards = data.cards;
-    
+    State.currentDeck = data.deck; State.currentCards = data.cards;
     if (State.user) {
       const progData = await API.get(`/progress/${deckId}`);
       State.currentProgress = {};
       (progData.progress || []).forEach(p => { State.currentProgress[p.card_id] = p; });
-    } else {
-      State.currentProgress = LocalProgress.getAll();
-    }
-    
+    } else { State.currentProgress = LocalProgress.getAll(); }
     render();
-  } catch (e) {
-    showToast('単語帳の読み込みに失敗しました', 'error');
-  }
+  } catch (e) { showToast('単語帳の読み込みに失敗しました', 'error'); }
 }
 
 function renderDeckView() {
-  if (!State.currentDeck) {
-    return `<div class="loading"><div class="spinner"></div></div>`;
-  }
-  
+  if (!State.currentDeck) return `<div class="loading"><div class="spinner"></div></div>`;
   const deck = State.currentDeck;
   const cards = State.currentCards;
   const progress = getAllProgress();
   const isOwner = State.user && deck.user_id === State.user.id;
-  
   const masteredCount = cards.filter(c => progress[c.id]?.status === 'mastered').length;
-  const studiedCount = cards.filter(c => progress[c.id]).length;
-  
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('${isOwner ? 'mydecks' : 'browse'}')"><i class="fas fa-arrow-left"></i></button>
         <div style="flex:1;min-width:0;">
-          <h2 style="font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(deck.name)}</h2>
-          <div style="font-size:0.78rem;color:var(--text-tertiary);">by ${escapeHtml(deck.author_name)} · ${cards.length}語</div>
+          <h2 style="font-size:1.05rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(deck.name)}</h2>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);">by ${escapeHtml(deck.author_name)} · ${cards.length}語</div>
         </div>
       </div>
-      
-      <div class="stats-grid" style="margin-bottom:16px;">
-        <div class="stat-card">
-          <div class="stat-value">${cards.length}</div>
-          <div class="stat-label">全単語数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${masteredCount}</div>
-          <div class="stat-label">習得済み</div>
-        </div>
+      <div class="stats-grid" style="margin-bottom:12px;">
+        <div class="stat-card"><div class="stat-value">${cards.length}</div><div class="stat-label">全単語数</div></div>
+        <div class="stat-card"><div class="stat-value">${masteredCount}</div><div class="stat-label">習得済み</div></div>
       </div>
-
-      <div class="progress-bar-container" style="margin-bottom:20px;">
+      <div class="progress-bar-container" style="margin-bottom:16px;">
         <div class="progress-bar-fill" style="width:${cards.length ? Math.round(masteredCount / cards.length * 100) : 0}%;"></div>
       </div>
-      
-      <button class="btn btn-primary btn-lg" onclick="startStudySelect('${deck.id}')" style="width:100%;margin-bottom:12px;">
-        <i class="fas fa-play"></i> 学習開始
-      </button>
-      
+      <button class="btn btn-primary btn-lg" onclick="startStudySelect('${deck.id}')" style="width:100%;margin-bottom:10px;"><i class="fas fa-play"></i> 学習開始</button>
       ${isOwner ? `
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-          <button class="btn btn-sm" onclick="showAddCardModal('${deck.id}')" style="flex:1;">
-            <i class="fas fa-plus"></i> 単語追加
-          </button>
-          <button class="btn btn-sm" onclick="navigate('publish', {publishDeckId:'${deck.id}'})" style="flex:1;">
-            <i class="fas fa-globe"></i> ${deck.is_public ? '公開設定' : '公開する'}
-          </button>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="btn btn-sm" onclick="showAddCardModal('${deck.id}')" style="flex:1;"><i class="fas fa-plus"></i> 単語追加</button>
+          <button class="btn btn-sm" onclick="navigate('publish', {publishDeckId:'${deck.id}'})" style="flex:1;"><i class="fas fa-globe"></i> ${deck.is_public ? '公開設定' : '公開する'}</button>
         </div>
       ` : ''}
-      
-      <div class="section-title" style="margin-top:20px;">単語一覧</div>
+      <div class="section-title" style="margin-top:16px;">単語一覧</div>
       <div class="card" style="padding:0;overflow:hidden;">
         ${cards.map((card, i) => {
           const p = progress[card.id];
@@ -672,19 +521,8 @@ function renderDeckView() {
               <div class="card-list-word">${escapeHtml(card.word)}</div>
               <div class="card-list-meaning">${escapeHtml(card.meaning)}</div>
               <div class="card-list-status ${statusClass}"></div>
-              ${isOwner ? `
-                <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();editCard('${card.id}')" style="flex-shrink:0;">
-                  <i class="fas fa-pen" style="font-size:0.65rem;"></i>
-                </button>
-                <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();deleteCard('${card.id}','${escapeHtml(card.word)}')" style="flex-shrink:0;color:var(--danger);">
-                  <i class="fas fa-times" style="font-size:0.7rem;"></i>
-                </button>
-              ` : ''}
-              ${p?.status === 'mastered' ? `
-                <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();resetCard('${card.id}')" title="未習得に戻す" style="flex-shrink:0;">
-                  <i class="fas fa-undo" style="font-size:0.65rem;"></i>
-                </button>
-              ` : ''}
+              ${isOwner ? `<button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();editCard('${card.id}')" style="flex-shrink:0;"><i class="fas fa-pen" style="font-size:0.6rem;"></i></button><button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();deleteCard('${card.id}','${escapeHtml(card.word)}')" style="flex-shrink:0;color:var(--danger);"><i class="fas fa-times" style="font-size:0.65rem;"></i></button>` : ''}
+              ${p?.status === 'mastered' ? `<button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();resetCard('${card.id}')" title="未習得に戻す"><i class="fas fa-undo" style="font-size:0.6rem;"></i></button>` : ''}
             </div>
           `;
         }).join('')}
@@ -693,55 +531,46 @@ function renderDeckView() {
   `;
 }
 
-// ===== Study Mode Select =====
-function startStudySelect(deckId) {
-  navigate('study-select', { studyDeckId: deckId });
-}
+// ===== Study Select =====
+function startStudySelect(deckId) { navigate('study-select', { studyDeckId: deckId }); }
 
 function renderStudySelect() {
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="openDeck('${State.studyDeckId}')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">学習モード選択</h2>
       </div>
-
-      <div style="display:flex;flex-direction:column;gap:12px;">
-        <button class="card" onclick="startStudy('normal')" style="cursor:pointer;text-align:left;">
-          <div style="display:flex;align-items:center;gap:14px;">
-            <div style="width:50px;height:50px;border-radius:var(--radius-md);background:var(--info-bg);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:var(--info);flex-shrink:0;">
-              <i class="fas fa-clone"></i>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:1rem;margin-bottom:2px;">ノーマルモード</div>
-              <div style="font-size:0.8rem;color:var(--text-secondary);">表面:番号と単語 → 裏面:意味・例文・絵文字</div>
-            </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="card study-mode-card" onclick="startStudy('normal')">
+          <div class="study-mode-icon" style="background:var(--info-bg);color:var(--info);"><i class="fas fa-clone"></i></div>
+          <div class="study-mode-info">
+            <div class="study-mode-name">ノーマルモード</div>
+            <div class="study-mode-desc">表面: 番号と単語 → 裏面: 意味・例文・絵文字</div>
           </div>
         </button>
-
-        <button class="card" onclick="startStudy('simple')" style="cursor:pointer;text-align:left;">
-          <div style="display:flex;align-items:center;gap:14px;">
-            <div style="width:50px;height:50px;border-radius:var(--radius-md);background:var(--success-bg);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:var(--success);flex-shrink:0;">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:1rem;margin-bottom:2px;">シンプルモード</div>
-              <div style="font-size:0.8rem;color:var(--text-secondary);">⭕️正解 / ❌不正解 のシンプル2択</div>
-            </div>
+        <button class="card study-mode-card" onclick="startStudy('simple')">
+          <div class="study-mode-icon" style="background:var(--success-bg);color:var(--success);"><i class="fas fa-check-circle"></i></div>
+          <div class="study-mode-info">
+            <div class="study-mode-name">シンプルモード</div>
+            <div class="study-mode-desc">⭕️正解 / ❌不正解 のシンプル2択</div>
           </div>
         </button>
-
-        <button class="card" onclick="startStudy('oni')" style="cursor:pointer;text-align:left;">
-          <div style="display:flex;align-items:center;gap:14px;">
-            <div style="width:50px;height:50px;border-radius:var(--radius-md);background:var(--danger-bg);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:var(--danger);flex-shrink:0;">
-              <i class="fas fa-fire"></i>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:1rem;margin-bottom:2px;">🔥 鬼モード</div>
-              <div style="font-size:0.8rem;color:var(--text-secondary);">意味を見てスペルを入力（大文字小文字は許容）</div>
-            </div>
+        <button class="card study-mode-card" onclick="startStudy('oni')">
+          <div class="study-mode-icon" style="background:var(--danger-bg);color:var(--danger);"><i class="fas fa-fire"></i></div>
+          <div class="study-mode-info">
+            <div class="study-mode-name">🔥 鬼モード</div>
+            <div class="study-mode-desc">意味を見てスペルを入力（大文字小文字は許容）</div>
           </div>
         </button>
+      </div>
+
+      <div class="srs-explain-card">
+        <div class="srs-explain-title"><i class="fas fa-brain"></i> SRS順とは？</div>
+        <div class="srs-explain-text">
+          SRS（Spaced Repetition System＝間隔反復法）は、忘れかけたタイミングで復習することで記憶を最大限に定着させる科学的な学習法です。<br>
+          <strong>期限の近いカードから優先出題</strong>され、初回はランダムに出題されます。学習中いつでもランダム・番号順に切り替え可能です。
+        </div>
       </div>
     </div>
   `;
@@ -757,98 +586,75 @@ async function startStudy(mode) {
   State.forgotQueue = [];
   State.forgotCounter = 0;
   State.history = [];
-  
-  // Build study queue
   const progress = getAllProgress();
   State.studyQueue = buildStudyQueue(State.currentCards, progress, State.orderMode === 'srs' ? 'srs' : State.orderMode);
   State.studyIndex = 0;
-  
   if (State.studyQueue.length === 0) {
     showToast('学習する単語がありません！全て習得済みです 🎉', 'success');
     return;
   }
-  
   navigate('study');
 }
 
 function renderStudy() {
-  if (State.studyQueue.length === 0 || State.studyIndex >= State.studyQueue.length) {
-    return renderStudyComplete();
-  }
-  
-  // Check forgot queue
+  if (State.studyQueue.length === 0 || State.studyIndex >= State.studyQueue.length) return renderStudyComplete();
   if (State.forgotQueue.length > 0 && State.forgotCounter >= 20) {
     const forgotCard = State.forgotQueue.shift();
     State.studyQueue.splice(State.studyIndex, 0, forgotCard);
     State.forgotCounter = 0;
   }
-  
   const card = State.studyQueue[State.studyIndex];
   if (!card) return renderStudyComplete();
-  
-  const progress = State.studyQueue.length;
+  const total = State.studyQueue.length;
   const current = State.studyIndex + 1;
-  const pct = Math.round((current / progress) * 100);
-  
-  const modeLabels = { normal: 'ノーマルモード', simple: 'シンプルモード', oni: '🔥 鬼モード' };
+  const pct = Math.round((current / total) * 100);
+  const modeLabels = { normal: 'ノーマル', simple: 'シンプル', oni: '🔥 鬼' };
   const orderLabels = { srs: 'SRS順', random: 'ランダム', sequential: '番号順' };
-  
+
   return `
-    <div class="fade-in">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <button class="btn btn-sm btn-ghost" onclick="endStudySession()">
-          <i class="fas fa-times"></i> 終了
-        </button>
-        <span style="font-size:0.78rem;color:var(--text-tertiary);">${current} / ${progress}</span>
+    <div class="study-view fade-in">
+      <div class="study-top-bar">
+        <button class="btn btn-sm btn-ghost" onclick="endStudySession()"><i class="fas fa-times"></i> 終了</button>
+        <div class="mode-indicator">${modeLabels[State.studyMode]} · ${orderLabels[State.orderMode]}</div>
+        <span class="study-counter">${current} / ${total}</span>
       </div>
-      
-      <div class="mode-indicator">${modeLabels[State.studyMode]} · ${orderLabels[State.orderMode]}</div>
-      
-      <div class="progress-bar-container">
-        <div class="progress-bar-fill" style="width:${pct}%;"></div>
-      </div>
-      
+      <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
+
       ${State.studyMode === 'oni' ? renderOniCard(card) : renderFlashcard(card)}
-      
-      ${State.studyMode !== 'oni' ? renderRatingArea(card) : ''}
-      
-      <div class="control-row" style="margin-top:12px;">
-        <button class="btn btn-sm ${State.history.length === 0 ? 'btn-ghost' : ''}" 
-                onclick="undoLastRating()" ${State.history.length === 0 ? 'disabled style="opacity:0.4;"' : ''}>
-          <i class="fas fa-undo"></i> 戻る
-        </button>
-        <button class="btn btn-sm" onclick="toggleOrder()">
-          <i class="fas fa-${State.orderMode === 'random' ? 'random' : State.orderMode === 'sequential' ? 'sort-numeric-down' : 'brain'}"></i>
-          ${orderLabels[State.orderMode]}
-        </button>
+
+      <div class="study-controls">
+        ${renderRatingArea(card)}
+        <div class="study-bottom-controls">
+          <button class="btn btn-sm ${State.history.length === 0 ? 'btn-ghost' : ''}" onclick="undoLastRating()" ${State.history.length === 0 ? 'disabled style="opacity:0.35;"' : ''}>
+            <i class="fas fa-undo"></i> 戻る
+          </button>
+          <button class="btn btn-sm" onclick="toggleOrder()">
+            <i class="fas fa-${State.orderMode === 'random' ? 'random' : State.orderMode === 'sequential' ? 'sort-numeric-down' : 'brain'}"></i>
+            ${orderLabels[State.orderMode]}
+          </button>
+        </div>
       </div>
     </div>
   `;
 }
 
 function renderFlashcard(card) {
-  const front = State.studyMode === 'simple' 
-    ? `<div class="flashcard-word">${escapeHtml(card.word)}</div>` 
-    : `<div class="flashcard-number">#${card.sort_order}</div><div class="flashcard-word">${escapeHtml(card.word)}</div>`;
-    
+  const front = State.studyMode === 'simple'
+    ? `<div class="fc-word">${escapeHtml(card.word)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
+    : `<div class="fc-number">#${card.sort_order}</div><div class="fc-word">${escapeHtml(card.word)}</div>`;
+
   const back = State.studyMode === 'simple'
-    ? `<div class="flashcard-meaning">${escapeHtml(card.meaning)}</div>
-       ${card.emoji ? `<div class="flashcard-emoji">${card.emoji}</div>` : ''}`
-    : `<div class="flashcard-meaning">${escapeHtml(card.meaning)}</div>
-       ${card.example_sentence ? `<div class="flashcard-example">${escapeHtml(card.example_sentence)}</div>` : ''}
-       ${card.example_translation ? `<div class="flashcard-example-jp">${escapeHtml(card.example_translation)}</div>` : ''}
-       ${card.emoji ? `<div class="flashcard-emoji">${card.emoji}</div>` : ''}`;
+    ? `<div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
+    : `<div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>
+       ${card.example_sentence ? `<div class="fc-example">${escapeHtml(card.example_sentence)}</div>` : ''}
+       ${card.example_translation ? `<div class="fc-example-jp">${escapeHtml(card.example_translation)}</div>` : ''}
+       ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`;
 
   return `
     <div class="flashcard-area">
       <div class="flashcard ${State.isFlipped ? 'flipped' : ''}" onclick="flipCard()">
-        <div class="flashcard-face flashcard-front">
-          ${front}
-          <div class="flashcard-tap-hint">TAP TO FLIP</div>
-        </div>
-        <div class="flashcard-face flashcard-back">
-          ${back}
-        </div>
+        <div class="flashcard-face flashcard-front">${front}<div class="fc-tap-hint">タップしてめくる</div></div>
+        <div class="flashcard-face flashcard-back">${back}</div>
       </div>
     </div>
   `;
@@ -859,146 +665,99 @@ function renderOniCard(card) {
     <div class="flashcard-area">
       <div class="flashcard" style="transform:none;">
         <div class="flashcard-face flashcard-front" style="position:relative;backface-visibility:visible;">
-          <div class="flashcard-number">#${card.sort_order}</div>
-          <div class="flashcard-meaning" style="font-size:1.6rem;">${escapeHtml(card.meaning)}</div>
-          ${card.emoji ? `<div class="flashcard-emoji">${card.emoji}</div>` : ''}
+          <div class="fc-number">#${card.sort_order}</div>
+          <div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>
+          ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}
         </div>
       </div>
     </div>
     <div class="oni-input-area">
-      <input type="text" class="oni-input" id="oni-input" placeholder="英単語のスペルを入力..."
-             onkeydown="if(event.key==='Enter')checkOniAnswer()" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button class="btn btn-primary" onclick="checkOniAnswer()">
-        <i class="fas fa-check"></i>
-      </button>
+      <input type="text" class="oni-input" id="oni-input" placeholder="英単語のスペルを入力..." onkeydown="if(event.key==='Enter')checkOniAnswer()" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="btn btn-primary" onclick="checkOniAnswer()"><i class="fas fa-check"></i></button>
     </div>
-    <div id="oni-result" style="margin-top:12px;text-align:center;"></div>
+    <div id="oni-result" style="margin-top:8px;text-align:center;min-height:24px;"></div>
   `;
 }
 
 function renderRatingArea(card) {
-  if (!State.isFlipped) return '';
-  
+  // Simple mode: always show ⭕❌ (even before flip)
   if (State.studyMode === 'simple') {
     return `
-      <div class="rating-area">
-        <div class="rating-buttons-simple">
-          <button class="rating-btn-correct" onclick="rateCard('good')">⭕️</button>
-          <button class="rating-btn-wrong" onclick="rateCard('forgot')">❌</button>
-        </div>
+      <div class="rating-area-simple">
+        <button class="simple-btn simple-correct ${!State.isFlipped ? 'simple-disabled' : ''}" onclick="${State.isFlipped ? "rateCard('good')" : 'flipCard()'}">
+          <span>⭕</span>
+        </button>
+        <button class="simple-btn simple-wrong ${!State.isFlipped ? 'simple-disabled' : ''}" onclick="${State.isFlipped ? "rateCard('forgot')" : 'flipCard()'}">
+          <span>❌</span>
+        </button>
       </div>
     `;
   }
-  
+
+  // Normal mode: show 2x2 grid only after flip
+  if (!State.isFlipped) return '';
+
   return `
-    <div class="rating-area">
-      <div class="rating-buttons">
-        <button class="rating-btn rating-btn-mastered" onclick="rateCard('mastered')">
-          <span class="rating-icon">💎</span>
-          <span>完全に覚えた</span>
-        </button>
-        <button class="rating-btn rating-btn-good" onclick="rateCard('good')">
-          <span class="rating-icon">👍</span>
-          <span>普通</span>
-        </button>
-        <button class="rating-btn rating-btn-unsure" onclick="rateCard('unsure')">
-          <span class="rating-icon">🤔</span>
-          <span>自信なし</span>
-        </button>
-        <button class="rating-btn rating-btn-forgot" onclick="rateCard('forgot')">
-          <span class="rating-icon">💀</span>
-          <span>完全に忘れた</span>
-        </button>
-      </div>
+    <div class="rating-grid-2x2">
+      <button class="rating-btn rating-btn-mastered" onclick="rateCard('mastered')">
+        <span class="rating-icon">💎</span><span class="rating-label">完全に覚えた</span>
+      </button>
+      <button class="rating-btn rating-btn-good" onclick="rateCard('good')">
+        <span class="rating-icon">👍</span><span class="rating-label">普通</span>
+      </button>
+      <button class="rating-btn rating-btn-unsure" onclick="rateCard('unsure')">
+        <span class="rating-icon">🤔</span><span class="rating-label">自信なし</span>
+      </button>
+      <button class="rating-btn rating-btn-forgot" onclick="rateCard('forgot')">
+        <span class="rating-icon">💀</span><span class="rating-label">完全に忘れた</span>
+      </button>
     </div>
   `;
 }
 
-function flipCard() {
-  State.isFlipped = !State.isFlipped;
-  render();
-}
+function flipCard() { State.isFlipped = !State.isFlipped; render(); }
 
 async function rateCard(status) {
   const card = State.studyQueue[State.studyIndex];
   if (!card) return;
-  
-  // Save to history for undo
-  State.history.push({
-    index: State.studyIndex,
-    card,
-    status,
-    previousProgress: getProgress(card.id),
-  });
-  
+  State.history.push({ index: State.studyIndex, card, status, previousProgress: getProgress(card.id) });
   await saveProgress(card.id, State.currentDeck.id, status);
-  
   State.sessionCards++;
   if (status === 'mastered' || status === 'good') State.sessionCorrect++;
-  
-  // Handle "forgot" - add to forgot queue for re-study after 20 cards
-  if (status === 'forgot') {
-    State.forgotQueue.push(card);
-    State.forgotCounter = 0;
-  } else {
-    State.forgotCounter++;
-  }
-  
+  if (status === 'forgot') { State.forgotQueue.push(card); State.forgotCounter = 0; } else { State.forgotCounter++; }
   State.studyIndex++;
   State.isFlipped = false;
   render();
-  
-  // Focus oni input if in oni mode
-  if (State.studyMode === 'oni') {
-    setTimeout(() => {
-      const input = document.getElementById('oni-input');
-      if (input) input.focus();
-    }, 100);
-  }
+  if (State.studyMode === 'oni') setTimeout(() => { const input = document.getElementById('oni-input'); if (input) input.focus(); }, 100);
 }
 
 async function checkOniAnswer() {
   const input = document.getElementById('oni-input');
   const resultDiv = document.getElementById('oni-result');
   if (!input || !resultDiv) return;
-  
   const card = State.studyQueue[State.studyIndex];
   if (!card) return;
-  
   const answer = input.value.trim();
   if (!answer) return;
-  
   const correct = answer.toLowerCase() === card.word.toLowerCase();
-  
   input.classList.remove('correct', 'wrong');
   input.classList.add(correct ? 'correct' : 'wrong');
-  
   resultDiv.innerHTML = correct
     ? `<span style="color:var(--success);font-weight:700;">⭕ 正解！ ${escapeHtml(card.word)}</span>`
-    : `<span style="color:var(--danger);font-weight:700;">❌ 不正解... 正解: ${escapeHtml(card.word)}</span>`;
-  
-  setTimeout(() => {
-    rateCard(correct ? 'good' : 'forgot');
-  }, 1200);
+    : `<span style="color:var(--danger);font-weight:700;">❌ 不正解… 正解: ${escapeHtml(card.word)}</span>`;
+  setTimeout(() => rateCard(correct ? 'good' : 'forgot'), 1200);
 }
 
 function undoLastRating() {
   if (State.history.length === 0) return;
   const last = State.history.pop();
-  
   State.studyIndex = last.index;
   State.isFlipped = false;
   State.sessionCards = Math.max(0, State.sessionCards - 1);
-  
-  // Restore previous progress
   if (last.previousProgress) {
-    if (State.user) {
-      State.currentProgress[last.card.id] = last.previousProgress;
-    } else {
-      LocalProgress.set(last.card.id, last.previousProgress);
-    }
+    if (State.user) State.currentProgress[last.card.id] = last.previousProgress;
+    else LocalProgress.set(last.card.id, last.previousProgress);
   }
-  
   render();
   showToast('前の評価を取り消しました', 'info');
 }
@@ -1007,22 +766,17 @@ function toggleOrder() {
   const modes = ['srs', 'random', 'sequential'];
   const idx = modes.indexOf(State.orderMode);
   State.orderMode = modes[(idx + 1) % modes.length];
-  
-  // Rebuild queue from current position
   const remaining = State.studyQueue.slice(State.studyIndex);
   const progress = getAllProgress();
-  
   if (State.orderMode === 'random') {
     State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...shuffleArray(remaining)];
   } else if (State.orderMode === 'sequential') {
     remaining.sort((a, b) => a.sort_order - b.sort_order);
     State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...remaining];
   } else {
-    // Rebuild SRS
     const newQueue = buildStudyQueue(remaining, progress, 'srs');
     State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...newQueue];
   }
-  
   render();
   showToast(`${State.orderMode === 'random' ? 'ランダム' : State.orderMode === 'sequential' ? '番号順' : 'SRS順'}に切り替え`, 'info');
 }
@@ -1030,15 +784,7 @@ function toggleOrder() {
 async function endStudySession() {
   if (State.sessionCards > 0) {
     const duration = Math.round((Date.now() - State.sessionStart) / 1000);
-    try {
-      await API.post('/sessions', {
-        deckId: State.currentDeck?.id,
-        mode: State.studyMode,
-        cardsStudied: State.sessionCards,
-        correctCount: State.sessionCorrect,
-        durationSeconds: duration,
-      });
-    } catch { /* ok */ }
+    try { await API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: duration }); } catch {}
   }
   openDeck(State.currentDeck.id);
 }
@@ -1048,117 +794,63 @@ function renderStudyComplete() {
   const mins = Math.floor(duration / 60);
   const secs = duration % 60;
   const accuracy = State.sessionCards > 0 ? Math.round((State.sessionCorrect / State.sessionCards) * 100) : 0;
-  
-  // Save session
   if (State.sessionCards > 0) {
-    API.post('/sessions', {
-      deckId: State.currentDeck?.id,
-      mode: State.studyMode,
-      cardsStudied: State.sessionCards,
-      correctCount: State.sessionCorrect,
-      durationSeconds: duration,
-    }).catch(() => {});
+    API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: duration }).catch(() => {});
   }
-  
   return `
-    <div class="fade-in" style="text-align:center;padding-top:40px;">
-      <div style="font-size:4rem;margin-bottom:16px;">🎉</div>
-      <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:8px;">セッション完了！</h2>
-      <p style="color:var(--text-secondary);margin-bottom:24px;">お疲れ様でした！</p>
-      
+    <div class="fade-in" style="text-align:center;padding-top:32px;">
+      <div style="font-size:3.5rem;margin-bottom:12px;">🎉</div>
+      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:6px;">セッション完了！</h2>
+      <p style="color:var(--text-secondary);margin-bottom:20px;font-size:0.88rem;">お疲れ様でした！</p>
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">${State.sessionCards}</div>
-          <div class="stat-label">学習カード数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${accuracy}%</div>
-          <div class="stat-label">正答率</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${mins}:${secs.toString().padStart(2, '0')}</div>
-          <div class="stat-label">学習時間</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${State.sessionCorrect}</div>
-          <div class="stat-label">正解数</div>
-        </div>
+        <div class="stat-card"><div class="stat-value">${State.sessionCards}</div><div class="stat-label">学習カード</div></div>
+        <div class="stat-card"><div class="stat-value">${accuracy}%</div><div class="stat-label">正答率</div></div>
+        <div class="stat-card"><div class="stat-value">${mins}:${secs.toString().padStart(2, '0')}</div><div class="stat-label">学習時間</div></div>
+        <div class="stat-card"><div class="stat-value">${State.sessionCorrect}</div><div class="stat-label">正解数</div></div>
       </div>
-      
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
-        <button class="btn btn-primary btn-lg" onclick="startStudy(State.studyMode)">
-          <i class="fas fa-redo"></i> もう一度学習
-        </button>
-        <button class="btn btn-lg" onclick="openDeck('${State.currentDeck?.id}')">
-          <i class="fas fa-arrow-left"></i> 単語帳に戻る
-        </button>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
+        <button class="btn btn-primary btn-lg" onclick="startStudy(State.studyMode)"><i class="fas fa-redo"></i> もう一度学習</button>
+        <button class="btn btn-lg" onclick="openDeck('${State.currentDeck?.id}')"><i class="fas fa-arrow-left"></i> 単語帳に戻る</button>
       </div>
     </div>
   `;
 }
 
-// ===== Import View =====
+// ===== Import =====
 function renderImport() {
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">CSVインポート</h2>
       </div>
-      
-      <div class="input-group">
-        <label class="input-label">単語帳の名前 *</label>
-        <input type="text" class="input" id="import-name" placeholder="例: TOEIC 頻出単語 500">
-      </div>
-      
-      <div class="input-group">
-        <label class="input-label">説明（任意）</label>
-        <input type="text" class="input" id="import-desc" placeholder="単語帳の説明">
-      </div>
-      
+      <div class="input-group"><label class="input-label">単語帳の名前 *</label><input type="text" class="input" id="import-name" placeholder="例: TOEIC 頻出単語 500"></div>
+      <div class="input-group"><label class="input-label">説明（任意）</label><input type="text" class="input" id="import-desc" placeholder="単語帳の説明"></div>
       <div class="file-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
         <i class="fas fa-cloud-upload-alt"></i>
         <div class="file-drop-text">CSVファイルをタップして選択</div>
         <div class="file-drop-sub">形式: No,単語,意味,例文,和訳,絵文字（例文以降は任意）</div>
       </div>
       <input type="file" class="file-input-hidden" id="file-input" accept=".csv,.txt,.tsv" multiple onchange="handleFileImport(event)">
-      
-      <div style="margin-top:16px;">
-        <label class="input-label">または直接テキスト入力</label>
-        <textarea class="textarea" id="import-text" rows="6" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎&#10;2,book,本,This is a book.,これは本です。,📖"></textarea>
-      </div>
-      
-      <div id="import-preview" style="margin-top:16px;"></div>
-      
-      <div style="display:flex;gap:10px;margin-top:16px;">
-        <button class="btn btn-primary btn-lg" onclick="executeImport()" style="flex:1;">
-          <i class="fas fa-file-import"></i> インポート
-        </button>
-      </div>
+      <div style="margin-top:14px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="5" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎"></textarea></div>
+      <div id="import-preview" style="margin-top:14px;"></div>
+      <button class="btn btn-primary btn-lg" onclick="executeImport()" style="width:100%;margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button>
     </div>
   `;
 }
 
 let importedCards = [];
-
 function handleFileImport(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
-  
   importedCards = [];
   let filesProcessed = 0;
-  
   Array.from(files).forEach(file => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target.result;
-      const cards = parseCSV(text);
-      importedCards = importedCards.concat(cards);
+      importedCards = importedCards.concat(parseCSV(e.target.result));
       filesProcessed++;
-      
-      if (filesProcessed === files.length) {
-        showImportPreview();
-      }
+      if (filesProcessed === files.length) showImportPreview();
     };
     reader.readAsText(file);
   });
@@ -1167,26 +859,13 @@ function handleFileImport(event) {
 function showImportPreview() {
   const preview = document.getElementById('import-preview');
   if (!preview) return;
-  
-  if (importedCards.length === 0) {
-    preview.innerHTML = `<div class="card" style="text-align:center;color:var(--danger);">
-      <i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりませんでした
-    </div>`;
-    return;
-  }
-  
+  if (importedCards.length === 0) { preview.innerHTML = `<div class="card" style="text-align:center;color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりません</div>`; return; }
   preview.innerHTML = `
-    <div class="card">
-      <div style="font-weight:700;margin-bottom:8px;">${importedCards.length}語を検出</div>
-      <div style="max-height:200px;overflow-y:auto;">
-        ${importedCards.slice(0, 10).map((c, i) => `
-          <div class="card-list-item">
-            <div class="card-list-number">${i + 1}</div>
-            <div class="card-list-word">${escapeHtml(c.word)}</div>
-            <div class="card-list-meaning">${escapeHtml(c.meaning)}</div>
-          </div>
-        `).join('')}
-        ${importedCards.length > 10 ? `<div style="text-align:center;padding:8px;color:var(--text-tertiary);font-size:0.82rem;">...他 ${importedCards.length - 10}語</div>` : ''}
+    <div class="card" style="padding:14px;">
+      <div style="font-weight:700;margin-bottom:6px;">${importedCards.length}語を検出</div>
+      <div style="max-height:180px;overflow-y:auto;">
+        ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${escapeHtml(c.word)}</div><div class="card-list-meaning">${escapeHtml(c.meaning)}</div></div>`).join('')}
+        ${importedCards.length > 8 ? `<div style="text-align:center;padding:6px;color:var(--text-tertiary);font-size:0.8rem;">…他 ${importedCards.length - 8}語</div>` : ''}
       </div>
     </div>
   `;
@@ -1196,46 +875,26 @@ async function executeImport() {
   const name = document.getElementById('import-name')?.value?.trim();
   const desc = document.getElementById('import-desc')?.value?.trim() || '';
   const textArea = document.getElementById('import-text')?.value?.trim();
-  
   if (!name) { showToast('単語帳の名前を入力してください', 'error'); return; }
-  
-  // Parse text area if no file
-  if (importedCards.length === 0 && textArea) {
-    importedCards = parseCSV(textArea);
-  }
-  
-  if (importedCards.length === 0) {
-    showToast('インポートする単語がありません', 'error');
-    return;
-  }
-  
+  if (importedCards.length === 0 && textArea) importedCards = parseCSV(textArea);
+  if (importedCards.length === 0) { showToast('インポートする単語がありません', 'error'); return; }
   try {
-    const data = await API.post('/decks', {
-      name,
-      description: desc,
-      isPublic: false,
-      cards: importedCards,
-    });
-    
+    const data = await API.post('/decks', { name, description: desc, isPublic: false, cards: importedCards });
     importedCards = [];
     showToast(`${data.cardCount}語をインポートしました！`, 'success');
     openDeck(data.id);
-  } catch (e) {
-    showToast('インポートに失敗しました: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('インポート失敗: ' + e.message, 'error'); }
 }
 
-// ===== Stats View =====
+// ===== Stats =====
 function renderStats() {
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">統計情報</h2>
       </div>
-      <div id="stats-content">
-        <div class="loading"><div class="spinner"></div></div>
-      </div>
+      <div id="stats-content"><div class="loading"><div class="spinner"></div></div></div>
     </div>
   `;
 }
@@ -1243,112 +902,51 @@ function renderStats() {
 async function loadStats() {
   const container = document.getElementById('stats-content');
   if (!container) return;
-  
   if (!State.user) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">📊</div>
-        <div class="empty-text">統計情報を表示するにはログインが必要です</div>
-        <button class="btn btn-primary" onclick="navigate('auth')" style="margin-top:16px;">
-          <i class="fas fa-sign-in-alt"></i> ログイン
-        </button>
-      </div>
-    `;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">統計はログインが必要です</div><button class="btn btn-primary" onclick="navigate('auth')" style="margin-top:12px;"><i class="fas fa-sign-in-alt"></i> ログイン</button></div>`;
     return;
   }
-  
   try {
     const data = await API.get('/stats');
     State.stats = data.stats;
-    
-    if (!State.stats) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">まだ学習データがありません</div></div>';
-      return;
-    }
-    
+    if (!State.stats) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">まだ学習データがありません</div></div>'; return; }
     const s = State.stats;
     const streakInfo = getStreakInfo(s.currentStreak);
-    
-    // Build weekly chart
-    const days = ['日', '月', '火', '水', '木', '金', '土'];
     const maxCards = Math.max(...(s.weeklyData || []).map(d => d.cards), 1);
-    
-    // Distribution
+    const days = ['日','月','火','水','木','金','土'];
     const distMap = {};
     (s.distribution || []).forEach(d => { distMap[d.status] = d.count; });
     const totalDist = Object.values(distMap).reduce((a, b) => a + b, 0) || 1;
-    
     container.innerHTML = `
       <div class="streak-display">
-        <div class="streak-badge ${streakInfo.class}">${streakInfo.emoji}</div>
+        <div class="streak-badge ${streakInfo.cls}">${streakInfo.emoji}</div>
         <div class="streak-number">${s.currentStreak}</div>
         <div class="streak-label">連続学習日数 · ${streakInfo.label}</div>
       </div>
-      
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">${s.totalStudied || 0}</div>
-          <div class="stat-label">総学習カード</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${s.accuracy}%</div>
-          <div class="stat-label">正答率</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${s.masteredCards}</div>
-          <div class="stat-label">習得済み</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${formatTime(s.totalTime || 0)}</div>
-          <div class="stat-label">総学習時間</div>
-        </div>
+        <div class="stat-card"><div class="stat-value">${s.totalStudied || 0}</div><div class="stat-label">総学習カード</div></div>
+        <div class="stat-card"><div class="stat-value">${s.accuracy}%</div><div class="stat-label">正答率</div></div>
+        <div class="stat-card"><div class="stat-value">${s.masteredCards}</div><div class="stat-label">習得済み</div></div>
+        <div class="stat-card"><div class="stat-value">${formatTime(s.totalTime || 0)}</div><div class="stat-label">総学習時間</div></div>
       </div>
-      
       <div class="section-title">週間学習グラフ</div>
       <div class="weekly-chart">
-        ${(s.weeklyData || []).map(d => {
-          const h = Math.max(4, Math.round((d.cards / maxCards) * 80));
-          const dayName = days[new Date(d.study_date).getDay()];
-          return `
-            <div class="chart-bar-wrapper">
-              <div class="chart-bar" style="height:${h}px;"></div>
-              <div class="chart-label">${dayName}</div>
-            </div>
-          `;
-        }).join('')}
-        ${(s.weeklyData || []).length === 0 ? '<div style="flex:1;text-align:center;color:var(--text-tertiary);font-size:0.82rem;align-self:center;">データなし</div>' : ''}
+        ${(s.weeklyData||[]).map(d => { const h = Math.max(4, Math.round((d.cards/maxCards)*80)); const dn = days[new Date(d.study_date).getDay()]; return `<div class="chart-bar-wrapper"><div class="chart-bar" style="height:${h}px;"></div><div class="chart-label">${dn}</div></div>`; }).join('')}
+        ${(s.weeklyData||[]).length===0 ? '<div style="flex:1;text-align:center;color:var(--text-tertiary);font-size:0.8rem;align-self:center;">データなし</div>' : ''}
       </div>
-      
       <div class="section-title">習熟度分布</div>
       <div class="distribution-bars">
-        <div class="dist-row">
-          <div class="dist-label">習得済み</div>
-          <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap.mastered || 0) / totalDist * 100}%;background:var(--success);"></div></div>
-          <div class="dist-count">${distMap.mastered || 0}</div>
-        </div>
-        <div class="dist-row">
-          <div class="dist-label">普通</div>
-          <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap.good || 0) / totalDist * 100}%;background:var(--info);"></div></div>
-          <div class="dist-count">${distMap.good || 0}</div>
-        </div>
-        <div class="dist-row">
-          <div class="dist-label">自信なし</div>
-          <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap.unsure || 0) / totalDist * 100}%;background:var(--warning);"></div></div>
-          <div class="dist-count">${distMap.unsure || 0}</div>
-        </div>
-        <div class="dist-row">
-          <div class="dist-label">忘れた</div>
-          <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap.forgot || 0) / totalDist * 100}%;background:var(--danger);"></div></div>
-          <div class="dist-count">${distMap.forgot || 0}</div>
-        </div>
+        ${['mastered','good','unsure','forgot'].map(k => {
+          const labels = {mastered:'習得済み',good:'普通',unsure:'自信なし',forgot:'忘れた'};
+          const colors = {mastered:'var(--success)',good:'var(--info)',unsure:'var(--warning)',forgot:'var(--danger)'};
+          return `<div class="dist-row"><div class="dist-label">${labels[k]}</div><div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap[k]||0)/totalDist*100}%;background:${colors[k]};"></div></div><div class="dist-count">${distMap[k]||0}</div></div>`;
+        }).join('')}
       </div>
     `;
-  } catch (e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`;
-  }
+  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
 }
 
-// ===== Settings View =====
+// ===== Settings =====
 function renderSettings() {
   const themes = [
     { id: 'dull-black', name: 'Dull Black', preview: 'theme-preview-dull' },
@@ -1357,373 +955,150 @@ function renderSettings() {
     { id: 'white-pearl', name: 'White Pearl', preview: 'theme-preview-white' },
     { id: 'dreamy', name: 'Dreamy', preview: 'theme-preview-dreamy' },
   ];
-  
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">設定</h2>
       </div>
-      
       <div class="section-title">テーマ</div>
       <div class="theme-grid">
         ${themes.map(t => `
-          <div class="theme-option ${State.theme === t.id ? 'active' : ''}" onclick="applyTheme('${t.id}');render();">
+          <div class="theme-option ${State.theme===t.id?'active':''}" onclick="applyTheme('${t.id}');render();">
             <div class="theme-preview ${t.preview}"></div>
             <div class="theme-label">${t.name}</div>
           </div>
         `).join('')}
       </div>
-      
       ${State.user ? `
-        <div class="section-title" style="margin-top:24px;">アカウント</div>
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-            <div class="menu-avatar">${(State.user.displayName || 'U')[0].toUpperCase()}</div>
-            <div>
-              <div style="font-weight:600;">${State.user.displayName || State.user.username}</div>
-              <div style="font-size:0.82rem;color:var(--text-tertiary);">@${State.user.username}</div>
-            </div>
-          </div>
-          <button class="btn btn-danger btn-sm" onclick="logout()" style="width:100%;">
-            <i class="fas fa-sign-out-alt"></i> ログアウト
-          </button>
+        <div class="section-title" style="margin-top:20px;">アカウント</div>
+        <div class="card" style="display:flex;align-items:center;gap:12px;">
+          <div class="menu-avatar">${(State.user.displayName||'U')[0].toUpperCase()}</div>
+          <div style="flex:1;"><div style="font-weight:600;">${State.user.displayName||State.user.username}</div><div style="font-size:0.8rem;color:var(--text-tertiary);">@${State.user.username}</div></div>
+          <button class="btn btn-danger btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
         </div>
       ` : ''}
-      
-      <div class="section-title" style="margin-top:24px;">アプリについて</div>
-      <div class="card">
-        <div style="font-size:0.88rem;color:var(--text-secondary);line-height:1.8;">
-          <strong>VocabFlash</strong> v1.0<br>
-          科学的間隔反復法を使った英単語学習アプリ<br>
-          Cloudflare Workers + Hono + D1 で構築
-        </div>
-      </div>
+      <div class="section-title" style="margin-top:20px;">アプリについて</div>
+      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;"><strong>Neomemoria</strong> v2.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
     </div>
   `;
 }
 
-// ===== Auth View =====
+// ===== Auth =====
 function renderAuth() {
   return `
-    <div class="fade-in" style="max-width:400px;margin:0 auto;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+    <div class="fade-in" style="max-width:420px;margin:0 auto;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">ログイン / 新規登録</h2>
       </div>
-      
-      <div class="tabs" id="auth-tabs">
-        <button class="tab active" onclick="switchAuthTab('login')">ログイン</button>
-        <button class="tab" onclick="switchAuthTab('register')">新規登録</button>
-      </div>
-      
-      <div id="auth-form">
-        ${renderLoginForm()}
-      </div>
+      <div class="tabs" id="auth-tabs"><button class="tab active" onclick="switchAuthTab('login')">ログイン</button><button class="tab" onclick="switchAuthTab('register')">新規登録</button></div>
+      <div id="auth-form">${renderLoginForm()}</div>
     </div>
   `;
 }
-
 function renderLoginForm() {
-  return `
-    <div class="input-group">
-      <label class="input-label">ユーザー名</label>
-      <input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username">
-    </div>
-    <div class="input-group">
-      <label class="input-label">パスワード</label>
-      <input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="current-password"
-             onkeydown="if(event.key==='Enter')handleLogin()">
-    </div>
-    <button class="btn btn-primary btn-lg" onclick="handleLogin()" style="width:100%;">
-      <i class="fas fa-sign-in-alt"></i> ログイン
-    </button>
-  `;
+  return `<div class="input-group"><label class="input-label">ユーザー名</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div><div class="input-group"><label class="input-label">パスワード</label><input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()"></div><button class="btn btn-primary btn-lg" onclick="handleLogin()" style="width:100%;"><i class="fas fa-sign-in-alt"></i> ログイン</button>`;
 }
-
 function renderRegisterForm() {
-  return `
-    <div class="input-group">
-      <label class="input-label">ユーザー名（3〜30文字）</label>
-      <input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username">
-    </div>
-    <div class="input-group">
-      <label class="input-label">表示名（任意）</label>
-      <input type="text" class="input" id="auth-display" placeholder="表示名">
-    </div>
-    <div class="input-group">
-      <label class="input-label">パスワード（6文字以上）</label>
-      <input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="new-password"
-             onkeydown="if(event.key==='Enter')handleRegister()">
-    </div>
-    <button class="btn btn-primary btn-lg" onclick="handleRegister()" style="width:100%;">
-      <i class="fas fa-user-plus"></i> アカウント作成
-    </button>
-  `;
+  return `<div class="input-group"><label class="input-label">ユーザー名（3〜30文字）</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div><div class="input-group"><label class="input-label">表示名（任意）</label><input type="text" class="input" id="auth-display" placeholder="表示名"></div><div class="input-group"><label class="input-label">パスワード（6文字以上）</label><input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')handleRegister()"></div><button class="btn btn-primary btn-lg" onclick="handleRegister()" style="width:100%;"><i class="fas fa-user-plus"></i> アカウント作成</button>`;
 }
-
 function switchAuthTab(tab) {
   const tabs = document.querySelectorAll('#auth-tabs .tab');
-  tabs.forEach((t, i) => t.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'register' && i === 1)));
-  document.getElementById('auth-form').innerHTML = tab === 'login' ? renderLoginForm() : renderRegisterForm();
+  tabs.forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
+  document.getElementById('auth-form').innerHTML = tab==='login' ? renderLoginForm() : renderRegisterForm();
 }
-
 async function handleLogin() {
-  const username = document.getElementById('auth-username')?.value?.trim();
-  const password = document.getElementById('auth-password')?.value;
-  if (!username || !password) { showToast('入力してください', 'error'); return; }
-  try { await login(username, password); } catch (e) { showToast(e.message, 'error'); }
+  const u = document.getElementById('auth-username')?.value?.trim();
+  const p = document.getElementById('auth-password')?.value;
+  if (!u||!p) { showToast('入力してください','error'); return; }
+  try { await login(u,p); } catch(e) { showToast(e.message,'error'); }
 }
-
 async function handleRegister() {
-  const username = document.getElementById('auth-username')?.value?.trim();
-  const displayName = document.getElementById('auth-display')?.value?.trim();
-  const password = document.getElementById('auth-password')?.value;
-  if (!username || !password) { showToast('入力してください', 'error'); return; }
-  try { await register(username, password, displayName); } catch (e) { showToast(e.message, 'error'); }
+  const u = document.getElementById('auth-username')?.value?.trim();
+  const d = document.getElementById('auth-display')?.value?.trim();
+  const p = document.getElementById('auth-password')?.value;
+  if (!u||!p) { showToast('入力してください','error'); return; }
+  try { await register(u,p,d); } catch(e) { showToast(e.message,'error'); }
 }
 
-// ===== Publish View =====
+// ===== Publish =====
 function renderPublish() {
   const deck = State.myDecks?.find(d => d.id === State.publishDeckId) || State.currentDeck;
   if (!deck) return '<div class="empty-state"><div class="empty-text">単語帳が見つかりません</div></div>';
-  
   return `
     <div class="fade-in">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="openDeck('${deck.id}')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">公開設定</h2>
       </div>
-      
       <div class="card">
-        <div style="font-weight:700;margin-bottom:12px;">${escapeHtml(deck.name)}</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <span style="font-size:0.88rem;color:var(--text-secondary);">現在の状態:</span>
-          <span class="badge ${deck.is_public ? 'badge-success' : 'badge-warning'}">${deck.is_public ? '🌐 公開中' : '🔒 非公開'}</span>
-        </div>
-        <button class="btn ${deck.is_public ? 'btn-danger' : 'btn-primary'} btn-lg" onclick="togglePublish('${deck.id}', ${deck.is_public})" style="width:100%;">
-          <i class="fas fa-${deck.is_public ? 'lock' : 'globe'}"></i>
-          ${deck.is_public ? '非公開にする' : '公開する'}
-        </button>
+        <div style="font-weight:700;margin-bottom:10px;">${escapeHtml(deck.name)}</div>
+        <div style="margin-bottom:14px;"><span class="badge ${deck.is_public?'badge-success':'badge-warning'}">${deck.is_public?'🌐 公開中':'🔒 非公開'}</span></div>
+        <button class="btn ${deck.is_public?'btn-danger':'btn-primary'} btn-lg" onclick="togglePublish('${deck.id}',${deck.is_public})" style="width:100%;"><i class="fas fa-${deck.is_public?'lock':'globe'}"></i> ${deck.is_public?'非公開にする':'公開する'}</button>
       </div>
     </div>
   `;
 }
 
-async function togglePublish(deckId, isCurrentlyPublic) {
-  try {
-    await API.put(`/decks/${deckId}`, { isPublic: !isCurrentlyPublic });
-    showToast(isCurrentlyPublic ? '非公開にしました' : '公開しました！', 'success');
-    openDeck(deckId);
-  } catch (e) { showToast(e.message, 'error'); }
+async function togglePublish(deckId, isPublic) {
+  try { await API.put(`/decks/${deckId}`, { isPublic: !isPublic }); showToast(isPublic?'非公開にしました':'公開しました！','success'); openDeck(deckId); }
+  catch(e) { showToast(e.message,'error'); }
 }
 
 // ===== Deck Management =====
 async function renameDeck(deckId, currentName) {
   const newName = prompt('新しい名前:', currentName);
   if (!newName || newName === currentName) return;
-  try {
-    await API.put(`/decks/${deckId}`, { name: newName });
-    showToast('名前を変更しました', 'success');
-    loadMyDecks();
-  } catch (e) { showToast(e.message, 'error'); }
+  try { await API.put(`/decks/${deckId}`, { name: newName }); showToast('名前変更しました','success'); loadMyDecks(); } catch(e) { showToast(e.message,'error'); }
 }
-
 async function confirmDeleteDeck(deckId, deckName) {
-  if (!confirm(`「${deckName}」を削除しますか？この操作は取り消せません。`)) return;
-  try {
-    await API.del(`/decks/${deckId}`);
-    showToast('削除しました', 'success');
-    loadMyDecks();
-  } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm(`「${deckName}」を削除しますか？`)) return;
+  try { await API.del(`/decks/${deckId}`); showToast('削除しました','success'); loadMyDecks(); } catch(e) { showToast(e.message,'error'); }
 }
 
 function showAddCardModal(deckId) {
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.id = 'add-card-modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">単語を追加</div>
-        <button class="btn-icon-sm btn-ghost" onclick="document.getElementById('add-card-modal').remove()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="input-group">
-          <label class="input-label">単語 *</label>
-          <input type="text" class="input" id="new-word" placeholder="apple">
-        </div>
-        <div class="input-group">
-          <label class="input-label">意味 *</label>
-          <input type="text" class="input" id="new-meaning" placeholder="りんご">
-        </div>
-        <div class="input-group">
-          <label class="input-label">例文</label>
-          <input type="text" class="input" id="new-example" placeholder="I eat an apple.">
-        </div>
-        <div class="input-group">
-          <label class="input-label">例文の和訳</label>
-          <input type="text" class="input" id="new-translation" placeholder="私はりんごを食べる。">
-        </div>
-        <div class="input-group">
-          <label class="input-label">絵文字</label>
-          <input type="text" class="input" id="new-emoji" placeholder="🍎">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="document.getElementById('add-card-modal').remove()">キャンセル</button>
-        <button class="btn btn-primary" onclick="addCardToCurrentDeck('${deckId}')">追加</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+  const m = document.createElement('div'); m.className='modal-overlay'; m.id='add-card-modal';
+  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を追加</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('add-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語 *</label><input type="text" class="input" id="new-word" placeholder="apple"></div><div class="input-group"><label class="input-label">意味 *</label><input type="text" class="input" id="new-meaning" placeholder="りんご"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="new-example" placeholder="I eat an apple."></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="new-translation" placeholder="私はりんごを食べる。"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="new-emoji" placeholder="🍎"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('add-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="addCardToCurrentDeck('${deckId}')">追加</button></div></div>`;
+  document.body.appendChild(m);
 }
-
 async function addCardToCurrentDeck(deckId) {
-  const word = document.getElementById('new-word')?.value?.trim();
-  const meaning = document.getElementById('new-meaning')?.value?.trim();
-  const example_sentence = document.getElementById('new-example')?.value?.trim();
-  const example_translation = document.getElementById('new-translation')?.value?.trim();
-  const emoji = document.getElementById('new-emoji')?.value?.trim();
-  
-  if (!word || !meaning) { showToast('単語と意味は必須です', 'error'); return; }
-  
-  try {
-    await API.post(`/decks/${deckId}/cards`, { word, meaning, example_sentence, example_translation, emoji });
-    document.getElementById('add-card-modal')?.remove();
-    showToast('単語を追加しました', 'success');
-    openDeck(deckId);
-  } catch (e) { showToast(e.message, 'error'); }
+  const w=document.getElementById('new-word')?.value?.trim(),m=document.getElementById('new-meaning')?.value?.trim();
+  if(!w||!m){showToast('単語と意味は必須','error');return;}
+  try{await API.post(`/decks/${deckId}/cards`,{word:w,meaning:m,example_sentence:document.getElementById('new-example')?.value?.trim()||'',example_translation:document.getElementById('new-translation')?.value?.trim()||'',emoji:document.getElementById('new-emoji')?.value?.trim()||''});document.getElementById('add-card-modal')?.remove();showToast('追加しました','success');openDeck(deckId);}catch(e){showToast(e.message,'error');}
 }
 
 async function editCard(cardId) {
-  const card = State.currentCards.find(c => c.id === cardId);
-  if (!card) return;
-  
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.id = 'edit-card-modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">単語を編集</div>
-        <button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="input-group">
-          <label class="input-label">単語</label>
-          <input type="text" class="input" id="edit-word" value="${escapeHtml(card.word)}">
-        </div>
-        <div class="input-group">
-          <label class="input-label">意味</label>
-          <input type="text" class="input" id="edit-meaning" value="${escapeHtml(card.meaning)}">
-        </div>
-        <div class="input-group">
-          <label class="input-label">例文</label>
-          <input type="text" class="input" id="edit-example" value="${escapeHtml(card.example_sentence || '')}">
-        </div>
-        <div class="input-group">
-          <label class="input-label">例文の和訳</label>
-          <input type="text" class="input" id="edit-translation" value="${escapeHtml(card.example_translation || '')}">
-        </div>
-        <div class="input-group">
-          <label class="input-label">絵文字</label>
-          <input type="text" class="input" id="edit-emoji" value="${escapeHtml(card.emoji || '')}">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button>
-        <button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+  const card = State.currentCards.find(c=>c.id===cardId);
+  if(!card)return;
+  const m=document.createElement('div');m.className='modal-overlay';m.id='edit-card-modal';
+  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を編集</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語</label><input type="text" class="input" id="edit-word" value="${escapeHtml(card.word)}"></div><div class="input-group"><label class="input-label">意味</label><input type="text" class="input" id="edit-meaning" value="${escapeHtml(card.meaning)}"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="edit-example" value="${escapeHtml(card.example_sentence||'')}"></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="edit-translation" value="${escapeHtml(card.example_translation||'')}"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="edit-emoji" value="${escapeHtml(card.emoji||'')}"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button></div></div>`;
+  document.body.appendChild(m);
 }
-
 async function saveEditCard(cardId) {
-  const word = document.getElementById('edit-word')?.value?.trim();
-  const meaning = document.getElementById('edit-meaning')?.value?.trim();
-  const example_sentence = document.getElementById('edit-example')?.value?.trim();
-  const example_translation = document.getElementById('edit-translation')?.value?.trim();
-  const emoji = document.getElementById('edit-emoji')?.value?.trim();
-  
-  try {
-    await API.put(`/cards/${cardId}`, { word, meaning, example_sentence, example_translation, emoji });
-    document.getElementById('edit-card-modal')?.remove();
-    showToast('保存しました', 'success');
-    openDeck(State.currentDeck.id);
-  } catch (e) { showToast(e.message, 'error'); }
+  try{await API.put(`/cards/${cardId}`,{word:document.getElementById('edit-word')?.value?.trim(),meaning:document.getElementById('edit-meaning')?.value?.trim(),example_sentence:document.getElementById('edit-example')?.value?.trim(),example_translation:document.getElementById('edit-translation')?.value?.trim(),emoji:document.getElementById('edit-emoji')?.value?.trim()});document.getElementById('edit-card-modal')?.remove();showToast('保存しました','success');openDeck(State.currentDeck.id);}catch(e){showToast(e.message,'error');}
 }
-
-async function deleteCard(cardId, word) {
-  if (!confirm(`「${word}」を削除しますか？`)) return;
-  try {
-    await API.del(`/cards/${cardId}`);
-    showToast('削除しました', 'success');
-    openDeck(State.currentDeck.id);
-  } catch (e) { showToast(e.message, 'error'); }
+async function deleteCard(cardId,word) {
+  if(!confirm(`「${word}」を削除しますか？`))return;
+  try{await API.del(`/cards/${cardId}`);showToast('削除しました','success');openDeck(State.currentDeck.id);}catch(e){showToast(e.message,'error');}
 }
-
 async function resetCard(cardId) {
-  try {
-    if (State.user) {
-      await API.post('/progress/reset', { cardId });
-      delete State.currentProgress[cardId];
-    } else {
-      localStorage.removeItem(`vf_prog_${cardId}`);
-    }
-    showToast('未習得に戻しました', 'success');
-    render();
-  } catch (e) { showToast(e.message, 'error'); }
+  try{if(State.user){await API.post('/progress/reset',{cardId});delete State.currentProgress[cardId];}else{localStorage.removeItem(`vf_prog_${cardId}`);}showToast('未習得に戻しました','success');render();}catch(e){showToast(e.message,'error');}
 }
 
 // ===== Utilities =====
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+function escapeHtml(str) { if(!str)return''; const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
+function formatDate(dateStr) { if(!dateStr)return''; const d=new Date(dateStr); return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`; }
+function formatTime(seconds) { if(seconds<60)return`${seconds}秒`; if(seconds<3600)return`${Math.floor(seconds/60)}分`; return`${Math.floor(seconds/3600)}時間${Math.floor((seconds%3600)/60)}分`; }
 
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
-}
-
-function formatTime(seconds) {
-  if (seconds < 60) return `${seconds}秒`;
-  if (seconds < 3600) return `${Math.floor(seconds/60)}分`;
-  return `${Math.floor(seconds/3600)}時間${Math.floor((seconds%3600)/60)}分`;
-}
-
-// ===== Event Listeners =====
 function attachEventListeners() {
-  // Auto-load content for certain views
-  if (State.currentView === 'browse') setTimeout(() => loadPublicDecks(), 50);
-  if (State.currentView === 'mydecks') setTimeout(() => loadMyDecks(), 50);
-  if (State.currentView === 'stats') setTimeout(() => loadStats(), 50);
-  
-  // Focus oni input
-  if (State.currentView === 'study' && State.studyMode === 'oni') {
-    setTimeout(() => {
-      const input = document.getElementById('oni-input');
-      if (input) input.focus();
-    }, 100);
-  }
+  if (State.currentView==='browse') setTimeout(()=>loadPublicDecks(),50);
+  if (State.currentView==='mydecks') setTimeout(()=>loadMyDecks(),50);
+  if (State.currentView==='stats') setTimeout(()=>loadStats(),50);
+  if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},100);
 }
 
-// ===== Initialization =====
-async function init() {
-  applyTheme(State.theme);
-  await initAuth();
-  render();
-}
-
-// Start app
+// ===== Init =====
+async function init() { applyTheme(State.theme); await initAuth(); render(); }
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();
