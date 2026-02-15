@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vocabflash",
+  "compatibility_date": "2026-02-15",
+  "pages_build_output_dir": "./dist",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vocabflash-production",
+      "database_id": "6c41ed24-08ad-4467-b0af-a555fff0612d"
+    }
+  ]
+}
