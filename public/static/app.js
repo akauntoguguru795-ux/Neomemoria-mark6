@@ -1,5 +1,12 @@
 /* ============================================================
-   Neomemoria - Complete Frontend Application
+   Neomemoria - Complete Frontend Application v3
+   - Renamed all VocabFlash -> Neomemoria
+   - Menu on right side
+   - Enlarged meaning text on card back
+   - 2x2 rating grid near card bottom
+   - Simple mode O/X shown pre-flip at lower-right
+   - SRS explanation added
+   - Reduced whitespace, high-quality design
    ============================================================ */
 
 // ===== State Management =====
@@ -325,34 +332,34 @@ function toggleMenu() { State.menuOpen = !State.menuOpen; render(); }
 // ===== Home =====
 function renderHome() {
   return `
-    <div class="fade-in" style="padding-top:4px;">
-      <div style="text-align:center;margin-bottom:24px;">
-        <h1 style="font-size:1.5rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:4px;">英単語を、確実に覚える。</h1>
-        <p style="font-size:0.85rem;color:var(--text-secondary);">科学的な間隔反復で効率的に学習</p>
+    <div class="fade-in" style="padding-top:2px;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <h1 style="font-size:1.4rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:3px;">英単語を、確実に覚える。</h1>
+        <p style="font-size:0.82rem;color:var(--text-secondary);">科学的な間隔反復で効率的に学習</p>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <button class="btn btn-lg btn-primary" onclick="navigate('browse')" style="flex-direction:column;padding:22px 14px;">
-          <i class="fas fa-globe" style="font-size:1.4rem;margin-bottom:4px;"></i>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-lg btn-primary" onclick="navigate('browse')" style="flex-direction:column;padding:20px 12px;">
+          <i class="fas fa-globe" style="font-size:1.3rem;margin-bottom:3px;"></i>
           <span style="font-size:0.82rem;">公開単語帳</span>
         </button>
-        <button class="btn btn-lg" onclick="navigate('mydecks')" style="flex-direction:column;padding:22px 14px;">
-          <i class="fas fa-book" style="font-size:1.4rem;margin-bottom:4px;"></i>
+        <button class="btn btn-lg" onclick="navigate('mydecks')" style="flex-direction:column;padding:20px 12px;">
+          <i class="fas fa-book" style="font-size:1.3rem;margin-bottom:3px;"></i>
           <span style="font-size:0.82rem;">マイ単語帳</span>
         </button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:18px 14px;">
-          <i class="fas fa-file-import" style="font-size:1.1rem;margin-bottom:3px;"></i>
-          <span style="font-size:0.8rem;">CSVインポート</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:16px 12px;">
+          <i class="fas fa-file-import" style="font-size:1.05rem;margin-bottom:2px;"></i>
+          <span style="font-size:0.78rem;">CSVインポート</span>
         </button>
-        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:18px 14px;">
-          <i class="fas fa-chart-bar" style="font-size:1.1rem;margin-bottom:3px;"></i>
-          <span style="font-size:0.8rem;">統計情報</span>
+        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:16px 12px;">
+          <i class="fas fa-chart-bar" style="font-size:1.05rem;margin-bottom:2px;"></i>
+          <span style="font-size:0.78rem;">統計情報</span>
         </button>
       </div>
       ${!State.user ? `
         <div class="card" style="text-align:center;">
-          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px;">ログインすると学習進捗がサーバーに保存されます</p>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;">ログインすると学習進捗がサーバーに保存されます</p>
           <button class="btn btn-primary btn-sm" onclick="navigate('auth')"><i class="fas fa-user-plus"></i> 無料登録 / ログイン</button>
         </div>
       ` : ''}
@@ -400,7 +407,7 @@ async function loadPublicDecks() {
           <div class="deck-name">${escapeHtml(deck.name)}</div>
           <div class="deck-meta">${escapeHtml(deck.author_name)} · ${deck.card_count || deck.actual_count || 0}語 · ${formatDate(deck.created_at)}</div>
         </div>
-        <i class="fas fa-chevron-right" style="color:var(--text-tertiary);font-size:0.8rem;"></i>
+        <i class="fas fa-chevron-right" style="color:var(--text-tertiary);font-size:0.75rem;"></i>
       </div>
     `).join('');
   } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">読み込みエラー</div></div>`; }
@@ -411,7 +418,7 @@ function renderMyDecks() {
   return `
     <div class="fade-in">
       <div class="page-title-row">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
           <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
           <h2 class="section-title" style="margin:0;">マイ単語帳</h2>
         </div>
@@ -428,7 +435,7 @@ async function loadMyDecks() {
   if (!State.user) {
     const localDecks = JSON.parse(localStorage.getItem('vf_local_decks') || '[]');
     if (localDecks.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
       return;
     }
     container.innerHTML = localDecks.map(deck => renderDeckItem(deck, true)).join('');
@@ -437,7 +444,7 @@ async function loadMyDecks() {
   try {
     const data = await API.get('/decks/mine');
     if (!data.decks || data.decks.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
       return;
     }
     State.myDecks = data.decks;
@@ -456,8 +463,8 @@ function renderDeckItem(deck, showActions = false) {
       </div>
       ${showActions && isOwner ? `
         <div class="deck-actions">
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${escapeHtml(deck.name)}')" title="名前変更"><i class="fas fa-pen" style="font-size:0.72rem;"></i></button>
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${escapeHtml(deck.name)}')" title="削除" style="color:var(--danger);"><i class="fas fa-trash" style="font-size:0.72rem;"></i></button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${escapeHtml(deck.name)}')" title="名前変更"><i class="fas fa-pen" style="font-size:0.7rem;"></i></button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${escapeHtml(deck.name)}')" title="削除" style="color:var(--danger);"><i class="fas fa-trash" style="font-size:0.7rem;"></i></button>
         </div>
       ` : ''}
     </div>
@@ -492,25 +499,25 @@ function renderDeckView() {
       <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('${isOwner ? 'mydecks' : 'browse'}')"><i class="fas fa-arrow-left"></i></button>
         <div style="flex:1;min-width:0;">
-          <h2 style="font-size:1.05rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(deck.name)}</h2>
-          <div style="font-size:0.75rem;color:var(--text-tertiary);">by ${escapeHtml(deck.author_name)} · ${cards.length}語</div>
+          <h2 style="font-size:1.02rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(deck.name)}</h2>
+          <div style="font-size:0.72rem;color:var(--text-tertiary);">by ${escapeHtml(deck.author_name)} · ${cards.length}語</div>
         </div>
       </div>
-      <div class="stats-grid" style="margin-bottom:12px;">
+      <div class="stats-grid" style="margin-bottom:10px;">
         <div class="stat-card"><div class="stat-value">${cards.length}</div><div class="stat-label">全単語数</div></div>
         <div class="stat-card"><div class="stat-value">${masteredCount}</div><div class="stat-label">習得済み</div></div>
       </div>
-      <div class="progress-bar-container" style="margin-bottom:16px;">
+      <div class="progress-bar-container" style="margin-bottom:12px;">
         <div class="progress-bar-fill" style="width:${cards.length ? Math.round(masteredCount / cards.length * 100) : 0}%;"></div>
       </div>
-      <button class="btn btn-primary btn-lg" onclick="startStudySelect('${deck.id}')" style="width:100%;margin-bottom:10px;"><i class="fas fa-play"></i> 学習開始</button>
+      <button class="btn btn-primary btn-lg" onclick="startStudySelect('${deck.id}')" style="width:100%;margin-bottom:8px;"><i class="fas fa-play"></i> 学習開始</button>
       ${isOwner ? `
-        <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
           <button class="btn btn-sm" onclick="showAddCardModal('${deck.id}')" style="flex:1;"><i class="fas fa-plus"></i> 単語追加</button>
           <button class="btn btn-sm" onclick="navigate('publish', {publishDeckId:'${deck.id}'})" style="flex:1;"><i class="fas fa-globe"></i> ${deck.is_public ? '公開設定' : '公開する'}</button>
         </div>
       ` : ''}
-      <div class="section-title" style="margin-top:16px;">単語一覧</div>
+      <div class="section-title" style="margin-top:10px;">単語一覧</div>
       <div class="card" style="padding:0;overflow:hidden;">
         ${cards.map((card, i) => {
           const p = progress[card.id];
@@ -541,7 +548,7 @@ function renderStudySelect() {
         <button class="btn-icon btn-ghost" onclick="openDeck('${State.studyDeckId}')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">学習モード選択</h2>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
         <button class="card study-mode-card" onclick="startStudy('normal')">
           <div class="study-mode-icon" style="background:var(--info-bg);color:var(--info);"><i class="fas fa-clone"></i></div>
           <div class="study-mode-info">
@@ -553,7 +560,7 @@ function renderStudySelect() {
           <div class="study-mode-icon" style="background:var(--success-bg);color:var(--success);"><i class="fas fa-check-circle"></i></div>
           <div class="study-mode-info">
             <div class="study-mode-name">シンプルモード</div>
-            <div class="study-mode-desc">⭕️正解 / ❌不正解 のシンプル2択</div>
+            <div class="study-mode-desc">⭕️正解 / ❌不正解 のシンプル2択（めくる前から表示）</div>
           </div>
         </button>
         <button class="card study-mode-card" onclick="startStudy('oni')">
@@ -568,8 +575,26 @@ function renderStudySelect() {
       <div class="srs-explain-card">
         <div class="srs-explain-title"><i class="fas fa-brain"></i> SRS順とは？</div>
         <div class="srs-explain-text">
-          SRS（Spaced Repetition System＝間隔反復法）は、忘れかけたタイミングで復習することで記憶を最大限に定着させる科学的な学習法です。<br>
+          SRS（Spaced Repetition System＝<strong>間隔反復法</strong>）は、忘れかけたタイミングで復習することで記憶を最大限に定着させる科学的な学習法です。<br>
           <strong>期限の近いカードから優先出題</strong>され、初回はランダムに出題されます。学習中いつでもランダム・番号順に切り替え可能です。
+        </div>
+        <div class="srs-detail-grid">
+          <div class="srs-detail-item">
+            <div class="srs-label">💎 完全に覚えた</div>
+            <div class="srs-desc">もう出題しない（統計には含む・元に戻せる）</div>
+          </div>
+          <div class="srs-detail-item">
+            <div class="srs-label">👍 普通</div>
+            <div class="srs-desc">2日後に再出題</div>
+          </div>
+          <div class="srs-detail-item">
+            <div class="srs-label">🤔 自信なし</div>
+            <div class="srs-desc">1日後に再出題</div>
+          </div>
+          <div class="srs-detail-item">
+            <div class="srs-label">💀 完全に忘れた</div>
+            <div class="srs-desc">20枚後に再出題</div>
+          </div>
         </div>
       </div>
     </div>
@@ -675,23 +700,43 @@ function renderOniCard(card) {
       <input type="text" class="oni-input" id="oni-input" placeholder="英単語のスペルを入力..." onkeydown="if(event.key==='Enter')checkOniAnswer()" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button class="btn btn-primary" onclick="checkOniAnswer()"><i class="fas fa-check"></i></button>
     </div>
-    <div id="oni-result" style="margin-top:8px;text-align:center;min-height:24px;"></div>
+    <div id="oni-result" style="margin-top:6px;text-align:center;min-height:22px;"></div>
   `;
 }
 
 function renderRatingArea(card) {
-  // Simple mode: always show ⭕❌ (even before flip)
+  // Simple mode: show O/X buttons - before flip at lower-right (small), after flip full-width
   if (State.studyMode === 'simple') {
-    return `
-      <div class="rating-area-simple">
-        <button class="simple-btn simple-correct ${!State.isFlipped ? 'simple-disabled' : ''}" onclick="${State.isFlipped ? "rateCard('good')" : 'flipCard()'}">
-          <span>⭕</span>
-        </button>
-        <button class="simple-btn simple-wrong ${!State.isFlipped ? 'simple-disabled' : ''}" onclick="${State.isFlipped ? "rateCard('forgot')" : 'flipCard()'}">
-          <span>❌</span>
-        </button>
-      </div>
-    `;
+    if (!State.isFlipped) {
+      // Pre-flip: small O/X buttons at lower-right
+      return `
+        <div class="rating-area-simple-wrap">
+          <div class="simple-btns-preflip">
+            <button class="simple-btn simple-btn-sm simple-correct" onclick="flipAndRate('good')">
+              <span>⭕</span>
+            </button>
+            <button class="simple-btn simple-btn-sm simple-wrong" onclick="flipAndRate('forgot')">
+              <span>❌</span>
+            </button>
+          </div>
+          <div class="simple-preflip-hint">めくらずに回答 or タップでめくる</div>
+        </div>
+      `;
+    } else {
+      // Post-flip: full-width O/X
+      return `
+        <div class="rating-area-simple-wrap">
+          <div class="simple-btns-postflip">
+            <button class="simple-btn simple-btn-lg simple-correct" onclick="rateCard('good')">
+              <span>⭕</span>
+            </button>
+            <button class="simple-btn simple-btn-lg simple-wrong" onclick="rateCard('forgot')">
+              <span>❌</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
   }
 
   // Normal mode: show 2x2 grid only after flip
@@ -700,19 +745,43 @@ function renderRatingArea(card) {
   return `
     <div class="rating-grid-2x2">
       <button class="rating-btn rating-btn-mastered" onclick="rateCard('mastered')">
-        <span class="rating-icon">💎</span><span class="rating-label">完全に覚えた</span>
+        <span class="rating-icon">💎</span>
+        <span>
+          <span class="rating-label">完全に覚えた</span>
+          <span class="rating-hint">非表示</span>
+        </span>
       </button>
       <button class="rating-btn rating-btn-good" onclick="rateCard('good')">
-        <span class="rating-icon">👍</span><span class="rating-label">普通</span>
+        <span class="rating-icon">👍</span>
+        <span>
+          <span class="rating-label">普通</span>
+          <span class="rating-hint">2日後</span>
+        </span>
       </button>
       <button class="rating-btn rating-btn-unsure" onclick="rateCard('unsure')">
-        <span class="rating-icon">🤔</span><span class="rating-label">自信なし</span>
+        <span class="rating-icon">🤔</span>
+        <span>
+          <span class="rating-label">自信なし</span>
+          <span class="rating-hint">1日後</span>
+        </span>
       </button>
       <button class="rating-btn rating-btn-forgot" onclick="rateCard('forgot')">
-        <span class="rating-icon">💀</span><span class="rating-label">完全に忘れた</span>
+        <span class="rating-icon">💀</span>
+        <span>
+          <span class="rating-label">完全に忘れた</span>
+          <span class="rating-hint">20枚後</span>
+        </span>
       </button>
     </div>
   `;
+}
+
+// Simple mode: flip and immediately rate
+function flipAndRate(status) {
+  State.isFlipped = true;
+  render();
+  // Small delay so user sees the back briefly
+  setTimeout(() => rateCard(status), 400);
 }
 
 function flipCard() { State.isFlipped = !State.isFlipped; render(); }
@@ -798,17 +867,17 @@ function renderStudyComplete() {
     API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: duration }).catch(() => {});
   }
   return `
-    <div class="fade-in" style="text-align:center;padding-top:32px;">
-      <div style="font-size:3.5rem;margin-bottom:12px;">🎉</div>
-      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:6px;">セッション完了！</h2>
-      <p style="color:var(--text-secondary);margin-bottom:20px;font-size:0.88rem;">お疲れ様でした！</p>
+    <div class="fade-in" style="text-align:center;padding-top:24px;">
+      <div style="font-size:3rem;margin-bottom:10px;">🎉</div>
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:5px;">セッション完了！</h2>
+      <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.85rem;">お疲れ様でした！</p>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-value">${State.sessionCards}</div><div class="stat-label">学習カード</div></div>
         <div class="stat-card"><div class="stat-value">${accuracy}%</div><div class="stat-label">正答率</div></div>
         <div class="stat-card"><div class="stat-value">${mins}:${secs.toString().padStart(2, '0')}</div><div class="stat-label">学習時間</div></div>
         <div class="stat-card"><div class="stat-value">${State.sessionCorrect}</div><div class="stat-label">正解数</div></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
         <button class="btn btn-primary btn-lg" onclick="startStudy(State.studyMode)"><i class="fas fa-redo"></i> もう一度学習</button>
         <button class="btn btn-lg" onclick="openDeck('${State.currentDeck?.id}')"><i class="fas fa-arrow-left"></i> 単語帳に戻る</button>
       </div>
@@ -832,9 +901,9 @@ function renderImport() {
         <div class="file-drop-sub">形式: No,単語,意味,例文,和訳,絵文字（例文以降は任意）</div>
       </div>
       <input type="file" class="file-input-hidden" id="file-input" accept=".csv,.txt,.tsv" multiple onchange="handleFileImport(event)">
-      <div style="margin-top:14px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="5" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎"></textarea></div>
-      <div id="import-preview" style="margin-top:14px;"></div>
-      <button class="btn btn-primary btn-lg" onclick="executeImport()" style="width:100%;margin-top:14px;"><i class="fas fa-file-import"></i> インポート</button>
+      <div style="margin-top:10px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="4" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎"></textarea></div>
+      <div id="import-preview" style="margin-top:10px;"></div>
+      <button class="btn btn-primary btn-lg" onclick="executeImport()" style="width:100%;margin-top:10px;"><i class="fas fa-file-import"></i> インポート</button>
     </div>
   `;
 }
@@ -861,11 +930,11 @@ function showImportPreview() {
   if (!preview) return;
   if (importedCards.length === 0) { preview.innerHTML = `<div class="card" style="text-align:center;color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりません</div>`; return; }
   preview.innerHTML = `
-    <div class="card" style="padding:14px;">
-      <div style="font-weight:700;margin-bottom:6px;">${importedCards.length}語を検出</div>
-      <div style="max-height:180px;overflow-y:auto;">
+    <div class="card" style="padding:12px;">
+      <div style="font-weight:700;margin-bottom:4px;">${importedCards.length}語を検出</div>
+      <div style="max-height:160px;overflow-y:auto;">
         ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${escapeHtml(c.word)}</div><div class="card-list-meaning">${escapeHtml(c.meaning)}</div></div>`).join('')}
-        ${importedCards.length > 8 ? `<div style="text-align:center;padding:6px;color:var(--text-tertiary);font-size:0.8rem;">…他 ${importedCards.length - 8}語</div>` : ''}
+        ${importedCards.length > 8 ? `<div style="text-align:center;padding:5px;color:var(--text-tertiary);font-size:0.78rem;">…他 ${importedCards.length - 8}語</div>` : ''}
       </div>
     </div>
   `;
@@ -903,7 +972,7 @@ async function loadStats() {
   const container = document.getElementById('stats-content');
   if (!container) return;
   if (!State.user) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">統計はログインが必要です</div><button class="btn btn-primary" onclick="navigate('auth')" style="margin-top:12px;"><i class="fas fa-sign-in-alt"></i> ログイン</button></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">統計はログインが必要です</div><button class="btn btn-primary" onclick="navigate('auth')" style="margin-top:10px;"><i class="fas fa-sign-in-alt"></i> ログイン</button></div>`;
     return;
   }
   try {
@@ -931,7 +1000,7 @@ async function loadStats() {
       </div>
       <div class="section-title">週間学習グラフ</div>
       <div class="weekly-chart">
-        ${(s.weeklyData||[]).map(d => { const h = Math.max(4, Math.round((d.cards/maxCards)*80)); const dn = days[new Date(d.study_date).getDay()]; return `<div class="chart-bar-wrapper"><div class="chart-bar" style="height:${h}px;"></div><div class="chart-label">${dn}</div></div>`; }).join('')}
+        ${(s.weeklyData||[]).map(d => { const h = Math.max(4, Math.round((d.cards/maxCards)*70)); const dn = days[new Date(d.study_date).getDay()]; return `<div class="chart-bar-wrapper"><div class="chart-bar" style="height:${h}px;"></div><div class="chart-label">${dn}</div></div>`; }).join('')}
         ${(s.weeklyData||[]).length===0 ? '<div style="flex:1;text-align:center;color:var(--text-tertiary);font-size:0.8rem;align-self:center;">データなし</div>' : ''}
       </div>
       <div class="section-title">習熟度分布</div>
@@ -971,15 +1040,15 @@ function renderSettings() {
         `).join('')}
       </div>
       ${State.user ? `
-        <div class="section-title" style="margin-top:20px;">アカウント</div>
-        <div class="card" style="display:flex;align-items:center;gap:12px;">
+        <div class="section-title" style="margin-top:16px;">アカウント</div>
+        <div class="card" style="display:flex;align-items:center;gap:10px;">
           <div class="menu-avatar">${(State.user.displayName||'U')[0].toUpperCase()}</div>
-          <div style="flex:1;"><div style="font-weight:600;">${State.user.displayName||State.user.username}</div><div style="font-size:0.8rem;color:var(--text-tertiary);">@${State.user.username}</div></div>
+          <div style="flex:1;"><div style="font-weight:600;">${State.user.displayName||State.user.username}</div><div style="font-size:0.78rem;color:var(--text-tertiary);">@${State.user.username}</div></div>
           <button class="btn btn-danger btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
         </div>
       ` : ''}
-      <div class="section-title" style="margin-top:20px;">アプリについて</div>
-      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;"><strong>Neomemoria</strong> v2.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
+      <div class="section-title" style="margin-top:16px;">アプリについて</div>
+      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;"><strong>Neomemoria</strong> v3.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
     </div>
   `;
 }
@@ -1033,8 +1102,8 @@ function renderPublish() {
         <h2 class="section-title" style="margin:0;">公開設定</h2>
       </div>
       <div class="card">
-        <div style="font-weight:700;margin-bottom:10px;">${escapeHtml(deck.name)}</div>
-        <div style="margin-bottom:14px;"><span class="badge ${deck.is_public?'badge-success':'badge-warning'}">${deck.is_public?'🌐 公開中':'🔒 非公開'}</span></div>
+        <div style="font-weight:700;margin-bottom:8px;">${escapeHtml(deck.name)}</div>
+        <div style="margin-bottom:12px;"><span class="badge ${deck.is_public?'badge-success':'badge-warning'}">${deck.is_public?'🌐 公開中':'🔒 非公開'}</span></div>
         <button class="btn ${deck.is_public?'btn-danger':'btn-primary'} btn-lg" onclick="togglePublish('${deck.id}',${deck.is_public})" style="width:100%;"><i class="fas fa-${deck.is_public?'lock':'globe'}"></i> ${deck.is_public?'非公開にする':'公開する'}</button>
       </div>
     </div>
