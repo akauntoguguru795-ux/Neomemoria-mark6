@@ -1,12 +1,12 @@
 /* ============================================================
-   Neomemoria - Complete Frontend Application v3
-   - Renamed all VocabFlash -> Neomemoria
-   - Menu on right side
-   - Enlarged meaning text on card back
-   - 2x2 rating grid near card bottom
-   - Simple mode O/X shown pre-flip at lower-right
-   - SRS explanation added
-   - Reduced whitespace, high-quality design
+   Neomemoria - Complete Frontend Application v4.0
+   - 3 button layout options (settings)
+   - Enlarged rating buttons
+   - Simple mode same size pre/post flip
+   - Password visibility toggle
+   - Performance optimized (DOM diffing, debounce)
+   - Study history
+   - 9 premium themes
    ============================================================ */
 
 // ===== State Management =====
@@ -15,6 +15,7 @@ const State = {
   token: localStorage.getItem('vf_token') || null,
   currentView: 'home',
   theme: localStorage.getItem('vf_theme') || 'dull-black',
+  buttonLayout: localStorage.getItem('vf_btn_layout') || 'right',
   decks: [],
   myDecks: [],
   currentDeck: null,
@@ -56,33 +57,52 @@ const API = {
       throw e;
     }
   },
-  get(path) { return this.request('GET', path); },
-  post(path, body) { return this.request('POST', path, body); },
-  put(path, body) { return this.request('PUT', path, body); },
-  del(path) { return this.request('DELETE', path); },
+  get(p) { return this.request('GET', p); },
+  post(p, b) { return this.request('POST', p, b); },
+  put(p, b) { return this.request('PUT', p, b); },
+  del(p) { return this.request('DELETE', p); },
 };
 
-// ===== Theme System =====
-function applyTheme(theme) {
-  State.theme = theme;
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('vf_theme', theme);
+// ===== Theme =====
+function applyTheme(t) {
+  State.theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('vf_theme', t);
 }
 
+// ===== Button Layout =====
+function setButtonLayout(layout) {
+  State.buttonLayout = layout;
+  localStorage.setItem('vf_btn_layout', layout);
+}
+
+// ===== Study History (localStorage) =====
+const StudyHistory = {
+  KEY: 'vf_study_history',
+  get() { try { return JSON.parse(localStorage.getItem(this.KEY)) || []; } catch { return []; } },
+  add(entry) {
+    const hist = this.get();
+    hist.unshift({ ...entry, timestamp: Date.now() });
+    if (hist.length > 50) hist.length = 50;
+    localStorage.setItem(this.KEY, JSON.stringify(hist));
+  },
+  clear() { localStorage.removeItem(this.KEY); }
+};
+
 // ===== Toast =====
+let toastContainer = null;
 function showToast(message, type = 'info') {
-  let container = document.querySelector('.toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.className = 'toast-container';
-    document.body.appendChild(container);
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.className = 'toast-container';
+    document.body.appendChild(toastContainer);
   }
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
   toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i>${message}`;
-  container.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+  toastContainer.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 200); }, 2500);
 }
 
 // ===== Navigation =====
@@ -96,10 +116,8 @@ function navigate(view, data = {}) {
 // ===== Auth =====
 async function initAuth() {
   if (State.token) {
-    try {
-      const { user } = await API.get('/auth/me');
-      State.user = user;
-    } catch { State.token = null; localStorage.removeItem('vf_token'); }
+    try { const { user } = await API.get('/auth/me'); State.user = user; }
+    catch { State.token = null; localStorage.removeItem('vf_token'); }
   }
 }
 
@@ -137,7 +155,7 @@ const LocalProgress = {
   }
 };
 
-// ===== SRS Engine =====
+// ===== SRS =====
 function getNextReview(status) {
   const now = new Date();
   switch (status) {
@@ -159,12 +177,12 @@ function buildStudyQueue(cards, progress, mode = 'srs') {
   if (mode === 'sequential') return queue.sort((a, b) => a.sort_order - b.sort_order);
   if (mode === 'random') return shuffleArray([...queue]);
   const now = new Date().toISOString();
-  const unseenCards = queue.filter(c => !progress[c.id]);
-  const reviewCards = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review <= now);
-  const futureCards = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review > now);
-  if (unseenCards.length === queue.length) return shuffleArray(unseenCards);
-  reviewCards.sort((a, b) => (progress[a.id]?.next_review || '').localeCompare(progress[b.id]?.next_review || ''));
-  return [...reviewCards, ...shuffleArray(unseenCards), ...futureCards];
+  const unseen = queue.filter(c => !progress[c.id]);
+  const review = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review <= now);
+  const future = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review > now);
+  if (unseen.length === queue.length) return shuffleArray(unseen);
+  review.sort((a, b) => (progress[a.id]?.next_review || '').localeCompare(progress[b.id]?.next_review || ''));
+  return [...review, ...shuffleArray(unseen), ...future];
 }
 
 function shuffleArray(arr) {
@@ -175,7 +193,7 @@ function shuffleArray(arr) {
   return arr;
 }
 
-// ===== CSV Parser =====
+// ===== CSV =====
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const cards = [];
@@ -185,14 +203,14 @@ function parseCSV(text) {
     const fields = parseCSVLine(line);
     if (fields.length < 2) continue;
     if (i === 0 && (fields[0].toLowerCase() === 'no' || fields[0].toLowerCase() === 'number' || fields[0].toLowerCase() === '番号')) continue;
-    let startIdx = 0;
-    if (fields.length >= 3 && /^\d+$/.test(fields[0].trim())) startIdx = 1;
+    let s = 0;
+    if (fields.length >= 3 && /^\d+$/.test(fields[0].trim())) s = 1;
     const card = {
-      word: (fields[startIdx] || '').trim(),
-      meaning: (fields[startIdx + 1] || '').trim(),
-      example_sentence: (fields[startIdx + 2] || '').trim(),
-      example_translation: (fields[startIdx + 3] || '').trim(),
-      emoji: (fields[startIdx + 4] || '').trim(),
+      word: (fields[s] || '').trim(),
+      meaning: (fields[s+1] || '').trim(),
+      example_sentence: (fields[s+2] || '').trim(),
+      example_translation: (fields[s+3] || '').trim(),
+      emoji: (fields[s+4] || '').trim(),
     };
     if (card.word && card.meaning) cards.push(card);
   }
@@ -200,14 +218,14 @@ function parseCSV(text) {
 }
 
 function parseCSVLine(line) {
-  const fields = []; let current = ''; let inQuotes = false;
+  const fields = []; let cur = ''; let inQ = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
-    else if ((ch === ',' || ch === '\t') && !inQuotes) { fields.push(current); current = ''; }
-    else { current += ch; }
+    if (ch === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if ((ch === ',' || ch === '\t') && !inQ) { fields.push(cur); cur = ''; }
+    else { cur += ch; }
   }
-  fields.push(current);
+  fields.push(cur);
   return fields;
 }
 
@@ -223,7 +241,7 @@ function getAllProgress() {
 
 async function saveProgress(cardId, deckId, status) {
   const nextReview = getNextReview(status);
-  const progressData = {
+  const pd = {
     status,
     next_review: nextReview === 'forgot' ? null : nextReview,
     last_reviewed: new Date().toISOString(),
@@ -231,14 +249,13 @@ async function saveProgress(cardId, deckId, status) {
     correct_count: (getProgress(cardId)?.correct_count || 0) + (status === 'mastered' || status === 'good' ? 1 : 0),
   };
   if (State.user) {
-    State.currentProgress[cardId] = progressData;
-    try { await API.post('/progress', { cardId, deckId, status, nextReview: progressData.next_review }); } catch {}
+    State.currentProgress[cardId] = pd;
+    try { await API.post('/progress', { cardId, deckId, status, nextReview: pd.next_review }); } catch {}
   } else {
-    LocalProgress.set(cardId, progressData);
+    LocalProgress.set(cardId, pd);
   }
 }
 
-// ===== Streak =====
 function getStreakInfo(streak) {
   if (streak >= 30) return { emoji: '🏆', label: 'レジェンド', cls: 'streak-sparkle' };
   if (streak >= 14) return { emoji: '👑', label: 'キング', cls: '' };
@@ -247,7 +264,7 @@ function getStreakInfo(streak) {
   return { emoji: '📚', label: 'スタート', cls: '' };
 }
 
-// ===== Render Engine =====
+// ===== Render Engine (optimized: direct innerHTML update) =====
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -264,6 +281,7 @@ function render() {
     case 'settings': html = renderSettings(); break;
     case 'auth': html = renderAuth(); break;
     case 'publish': html = renderPublish(); break;
+    case 'history': html = renderHistoryView(); break;
     default: html = renderHome();
   }
   app.innerHTML = renderHeader() + html;
@@ -279,9 +297,7 @@ function renderHeader() {
       </div>
       <div class="header-actions">
         ${State.user ? `<span class="header-user">${State.user.displayName || State.user.username}</span>` : ''}
-        <button class="btn-icon btn-ghost" onclick="toggleMenu()" aria-label="メニュー">
-          <i class="fas fa-bars"></i>
-        </button>
+        <button class="btn-icon btn-ghost" onclick="toggleMenu()" aria-label="メニュー"><i class="fas fa-bars"></i></button>
       </div>
     </header>
     ${State.menuOpen ? renderMenu() : ''}
@@ -304,9 +320,7 @@ function renderMenu() {
         ` : `
           <div style="text-align:center;">
             <div style="font-size:0.95rem;font-weight:600;margin-bottom:10px;">ゲストモード</div>
-            <button class="btn btn-primary btn-sm" onclick="navigate('auth');toggleMenu();" style="width:100%;">
-              <i class="fas fa-sign-in-alt"></i> ログイン / 登録
-            </button>
+            <button class="btn btn-primary btn-sm" onclick="navigate('auth');toggleMenu();" style="width:100%;"><i class="fas fa-sign-in-alt"></i> ログイン / 登録</button>
           </div>
         `}
       </div>
@@ -314,14 +328,13 @@ function renderMenu() {
       <button class="menu-item" onclick="navigate('browse');toggleMenu();"><i class="fas fa-globe"></i>公開単語帳を探す</button>
       <button class="menu-item" onclick="navigate('mydecks');toggleMenu();"><i class="fas fa-book"></i>マイ単語帳</button>
       <button class="menu-item" onclick="navigate('import');toggleMenu();"><i class="fas fa-file-import"></i>CSVインポート</button>
+      <button class="menu-item" onclick="navigate('history');toggleMenu();"><i class="fas fa-history"></i>学習履歴</button>
       <div class="menu-divider"></div>
       <button class="menu-item" onclick="navigate('stats');toggleMenu();"><i class="fas fa-chart-bar"></i>統計情報</button>
       <button class="menu-item" onclick="navigate('settings');toggleMenu();"><i class="fas fa-cog"></i>設定</button>
       ${State.user ? `
         <div class="menu-divider"></div>
-        <button class="menu-item" onclick="logout();toggleMenu();" style="color:var(--danger);">
-          <i class="fas fa-sign-out-alt" style="color:var(--danger);"></i>ログアウト
-        </button>
+        <button class="menu-item" onclick="logout();toggleMenu();" style="color:var(--danger);"><i class="fas fa-sign-out-alt" style="color:var(--danger);"></i>ログアウト</button>
       ` : ''}
     </nav>
   `;
@@ -347,14 +360,18 @@ function renderHome() {
           <span style="font-size:0.82rem;">マイ単語帳</span>
         </button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:16px 12px;">
-          <i class="fas fa-file-import" style="font-size:1.05rem;margin-bottom:2px;"></i>
-          <span style="font-size:0.78rem;">CSVインポート</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+        <button class="btn" onclick="navigate('import')" style="flex-direction:column;padding:14px 8px;">
+          <i class="fas fa-file-import" style="font-size:1rem;margin-bottom:2px;"></i>
+          <span style="font-size:0.72rem;">インポート</span>
         </button>
-        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:16px 12px;">
-          <i class="fas fa-chart-bar" style="font-size:1.05rem;margin-bottom:2px;"></i>
-          <span style="font-size:0.78rem;">統計情報</span>
+        <button class="btn" onclick="navigate('history')" style="flex-direction:column;padding:14px 8px;">
+          <i class="fas fa-history" style="font-size:1rem;margin-bottom:2px;"></i>
+          <span style="font-size:0.72rem;">学習履歴</span>
+        </button>
+        <button class="btn" onclick="navigate('stats')" style="flex-direction:column;padding:14px 8px;">
+          <i class="fas fa-chart-bar" style="font-size:1rem;margin-bottom:2px;"></i>
+          <span style="font-size:0.72rem;">統計情報</span>
         </button>
       </div>
       ${!State.user ? `
@@ -387,30 +404,30 @@ function renderBrowse() {
 }
 
 let searchTimeout = null;
-function handleSearch(e) { State.searchQuery = e.target.value; clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadPublicDecks(), 400); }
+function handleSearch(e) { State.searchQuery = e.target.value; clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadPublicDecks(), 350); }
 
 async function loadPublicDecks() {
-  const container = document.getElementById('deck-list');
-  if (!container) return;
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const c = document.getElementById('deck-list');
+  if (!c) return;
+  c.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const q = State.searchQuery ? `?q=${encodeURIComponent(State.searchQuery)}` : '';
     const data = await API.get(`/decks/public${q}`);
     if (!data.decks || data.decks.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">単語帳が見つかりません</div></div>`;
+      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">単語帳が見つかりません</div></div>';
       return;
     }
-    container.innerHTML = data.decks.map(deck => `
-      <div class="deck-item" onclick="openDeck('${deck.id}')">
+    c.innerHTML = data.decks.map(d => `
+      <div class="deck-item" onclick="openDeck('${d.id}')">
         <div class="deck-icon"><i class="fas fa-layer-group"></i></div>
         <div class="deck-info">
-          <div class="deck-name">${escapeHtml(deck.name)}</div>
-          <div class="deck-meta">${escapeHtml(deck.author_name)} · ${deck.card_count || deck.actual_count || 0}語 · ${formatDate(deck.created_at)}</div>
+          <div class="deck-name">${esc(d.name)}</div>
+          <div class="deck-meta">${esc(d.author_name)} · ${d.card_count || d.actual_count || 0}語 · ${fmtDate(d.created_at)}</div>
         </div>
         <i class="fas fa-chevron-right" style="color:var(--text-tertiary);font-size:0.75rem;"></i>
       </div>
     `).join('');
-  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">読み込みエラー</div></div>`; }
+  } catch { c.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">読み込みエラー</div></div>'; }
 }
 
 // ===== My Decks =====
@@ -430,26 +447,26 @@ function renderMyDecks() {
 }
 
 async function loadMyDecks() {
-  const container = document.getElementById('my-deck-list');
-  if (!container) return;
+  const c = document.getElementById('my-deck-list');
+  if (!c) return;
   if (!State.user) {
-    const localDecks = JSON.parse(localStorage.getItem('vf_local_decks') || '[]');
-    if (localDecks.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
+    const local = JSON.parse(localStorage.getItem('vf_local_decks') || '[]');
+    if (local.length === 0) {
+      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate(\'import\')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>';
       return;
     }
-    container.innerHTML = localDecks.map(deck => renderDeckItem(deck, true)).join('');
+    c.innerHTML = local.map(d => renderDeckItem(d, true)).join('');
     return;
   }
   try {
     const data = await API.get('/decks/mine');
     if (!data.decks || data.decks.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate('import')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>`;
+      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">単語帳がありません</div><button class="btn btn-primary" onclick="navigate(\'import\')" style="margin-top:12px;"><i class="fas fa-file-import"></i> インポート</button></div>';
       return;
     }
     State.myDecks = data.decks;
-    container.innerHTML = data.decks.map(deck => renderDeckItem(deck, true)).join('');
-  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
+    c.innerHTML = data.decks.map(d => renderDeckItem(d, true)).join('');
+  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
 }
 
 function renderDeckItem(deck, showActions = false) {
@@ -458,13 +475,13 @@ function renderDeckItem(deck, showActions = false) {
     <div class="deck-item">
       <div class="deck-icon" onclick="openDeck('${deck.id}')"><i class="fas fa-layer-group"></i></div>
       <div class="deck-info" onclick="openDeck('${deck.id}')">
-        <div class="deck-name">${escapeHtml(deck.name)}</div>
-        <div class="deck-meta">${deck.card_count || 0}語 · ${deck.is_public ? '🌐 公開' : '🔒 非公開'} · ${formatDate(deck.updated_at || deck.created_at)}</div>
+        <div class="deck-name">${esc(deck.name)}</div>
+        <div class="deck-meta">${deck.card_count || 0}語 · ${deck.is_public ? '🌐 公開' : '🔒 非公開'} · ${fmtDate(deck.updated_at || deck.created_at)}</div>
       </div>
       ${showActions && isOwner ? `
         <div class="deck-actions">
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${escapeHtml(deck.name)}')" title="名前変更"><i class="fas fa-pen" style="font-size:0.7rem;"></i></button>
-          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${escapeHtml(deck.name)}')" title="削除" style="color:var(--danger);"><i class="fas fa-trash" style="font-size:0.7rem;"></i></button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();renameDeck('${deck.id}','${esc(deck.name)}')" title="名前変更"><i class="fas fa-pen" style="font-size:0.7rem;"></i></button>
+          <button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}','${esc(deck.name)}')" title="削除" style="color:var(--danger);"><i class="fas fa-trash" style="font-size:0.7rem;"></i></button>
         </div>
       ` : ''}
     </div>
@@ -479,16 +496,16 @@ async function openDeck(deckId) {
     const data = await API.get(`/decks/${deckId}`);
     State.currentDeck = data.deck; State.currentCards = data.cards;
     if (State.user) {
-      const progData = await API.get(`/progress/${deckId}`);
+      const pd = await API.get(`/progress/${deckId}`);
       State.currentProgress = {};
-      (progData.progress || []).forEach(p => { State.currentProgress[p.card_id] = p; });
+      (pd.progress || []).forEach(p => { State.currentProgress[p.card_id] = p; });
     } else { State.currentProgress = LocalProgress.getAll(); }
     render();
-  } catch (e) { showToast('単語帳の読み込みに失敗しました', 'error'); }
+  } catch { showToast('単語帳の読み込みに失敗しました', 'error'); }
 }
 
 function renderDeckView() {
-  if (!State.currentDeck) return `<div class="loading"><div class="spinner"></div></div>`;
+  if (!State.currentDeck) return '<div class="loading"><div class="spinner"></div></div>';
   const deck = State.currentDeck;
   const cards = State.currentCards;
   const progress = getAllProgress();
@@ -499,8 +516,8 @@ function renderDeckView() {
       <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('${isOwner ? 'mydecks' : 'browse'}')"><i class="fas fa-arrow-left"></i></button>
         <div style="flex:1;min-width:0;">
-          <h2 style="font-size:1.02rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(deck.name)}</h2>
-          <div style="font-size:0.72rem;color:var(--text-tertiary);">by ${escapeHtml(deck.author_name)} · ${cards.length}語</div>
+          <h2 style="font-size:1.02rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(deck.name)}</h2>
+          <div style="font-size:0.72rem;color:var(--text-tertiary);">by ${esc(deck.author_name)} · ${cards.length}語</div>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:10px;">
@@ -521,14 +538,14 @@ function renderDeckView() {
       <div class="card" style="padding:0;overflow:hidden;">
         ${cards.map((card, i) => {
           const p = progress[card.id];
-          const statusClass = p ? `status-${p.status}` : 'status-unseen';
+          const sc = p ? `status-${p.status}` : 'status-unseen';
           return `
             <div class="card-list-item">
               <div class="card-list-number">${i + 1}</div>
-              <div class="card-list-word">${escapeHtml(card.word)}</div>
-              <div class="card-list-meaning">${escapeHtml(card.meaning)}</div>
-              <div class="card-list-status ${statusClass}"></div>
-              ${isOwner ? `<button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();editCard('${card.id}')" style="flex-shrink:0;"><i class="fas fa-pen" style="font-size:0.6rem;"></i></button><button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();deleteCard('${card.id}','${escapeHtml(card.word)}')" style="flex-shrink:0;color:var(--danger);"><i class="fas fa-times" style="font-size:0.65rem;"></i></button>` : ''}
+              <div class="card-list-word">${esc(card.word)}</div>
+              <div class="card-list-meaning">${esc(card.meaning)}</div>
+              <div class="card-list-status ${sc}"></div>
+              ${isOwner ? `<button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();editCard('${card.id}')" style="flex-shrink:0;"><i class="fas fa-pen" style="font-size:0.6rem;"></i></button><button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();deleteCard('${card.id}','${esc(card.word)}')" style="flex-shrink:0;color:var(--danger);"><i class="fas fa-times" style="font-size:0.65rem;"></i></button>` : ''}
               ${p?.status === 'mastered' ? `<button class="btn-icon-sm btn-ghost" onclick="event.stopPropagation();resetCard('${card.id}')" title="未習得に戻す"><i class="fas fa-undo" style="font-size:0.6rem;"></i></button>` : ''}
             </div>
           `;
@@ -571,30 +588,17 @@ function renderStudySelect() {
           </div>
         </button>
       </div>
-
       <div class="srs-explain-card">
         <div class="srs-explain-title"><i class="fas fa-brain"></i> SRS順とは？</div>
         <div class="srs-explain-text">
-          SRS（Spaced Repetition System＝<strong>間隔反復法</strong>）は、忘れかけたタイミングで復習することで記憶を最大限に定着させる科学的な学習法です。<br>
-          <strong>期限の近いカードから優先出題</strong>され、初回はランダムに出題されます。学習中いつでもランダム・番号順に切り替え可能です。
+          SRS（Spaced Repetition System＝<strong>間隔反復法</strong>）は、忘れかけたタイミングで復習することで記憶を定着させる科学的な学習法です。<br>
+          <strong>期限の近いカードから優先出題</strong>され、初回はランダムに出題されます。
         </div>
         <div class="srs-detail-grid">
-          <div class="srs-detail-item">
-            <div class="srs-label">💎 完全に覚えた</div>
-            <div class="srs-desc">もう出題しない（統計には含む・元に戻せる）</div>
-          </div>
-          <div class="srs-detail-item">
-            <div class="srs-label">👍 普通</div>
-            <div class="srs-desc">2日後に再出題</div>
-          </div>
-          <div class="srs-detail-item">
-            <div class="srs-label">🤔 自信なし</div>
-            <div class="srs-desc">1日後に再出題</div>
-          </div>
-          <div class="srs-detail-item">
-            <div class="srs-label">💀 完全に忘れた</div>
-            <div class="srs-desc">20枚後に再出題</div>
-          </div>
+          <div class="srs-detail-item"><div class="srs-label">💎 完全に覚えた</div><div class="srs-desc">もう出題しない</div></div>
+          <div class="srs-detail-item"><div class="srs-label">👍 普通</div><div class="srs-desc">2日後に再出題</div></div>
+          <div class="srs-detail-item"><div class="srs-label">🤔 自信なし</div><div class="srs-desc">1日後に再出題</div></div>
+          <div class="srs-detail-item"><div class="srs-label">💀 完全に忘れた</div><div class="srs-desc">20枚後に再出題</div></div>
         </div>
       </div>
     </div>
@@ -624,8 +628,8 @@ async function startStudy(mode) {
 function renderStudy() {
   if (State.studyQueue.length === 0 || State.studyIndex >= State.studyQueue.length) return renderStudyComplete();
   if (State.forgotQueue.length > 0 && State.forgotCounter >= 20) {
-    const forgotCard = State.forgotQueue.shift();
-    State.studyQueue.splice(State.studyIndex, 0, forgotCard);
+    const fc = State.forgotQueue.shift();
+    State.studyQueue.splice(State.studyIndex, 0, fc);
     State.forgotCounter = 0;
   }
   const card = State.studyQueue[State.studyIndex];
@@ -635,6 +639,7 @@ function renderStudy() {
   const pct = Math.round((current / total) * 100);
   const modeLabels = { normal: 'ノーマル', simple: 'シンプル', oni: '🔥 鬼' };
   const orderLabels = { srs: 'SRS順', random: 'ランダム', sequential: '番号順' };
+  const layout = State.buttonLayout;
 
   return `
     <div class="study-view fade-in">
@@ -644,11 +649,9 @@ function renderStudy() {
         <span class="study-counter">${current} / ${total}</span>
       </div>
       <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
-
       ${State.studyMode === 'oni' ? renderOniCard(card) : renderFlashcard(card)}
-
       <div class="study-controls">
-        ${renderRatingArea(card)}
+        ${renderRatingArea(card, layout)}
         <div class="study-bottom-controls">
           <button class="btn btn-sm ${State.history.length === 0 ? 'btn-ghost' : ''}" onclick="undoLastRating()" ${State.history.length === 0 ? 'disabled style="opacity:0.35;"' : ''}>
             <i class="fas fa-undo"></i> 戻る
@@ -665,14 +668,14 @@ function renderStudy() {
 
 function renderFlashcard(card) {
   const front = State.studyMode === 'simple'
-    ? `<div class="fc-word">${escapeHtml(card.word)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
-    : `<div class="fc-number">#${card.sort_order}</div><div class="fc-word">${escapeHtml(card.word)}</div>`;
+    ? `<div class="fc-word">${esc(card.word)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
+    : `<div class="fc-number">#${card.sort_order}</div><div class="fc-word">${esc(card.word)}</div>`;
 
   const back = State.studyMode === 'simple'
-    ? `<div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
-    : `<div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>
-       ${card.example_sentence ? `<div class="fc-example">${escapeHtml(card.example_sentence)}</div>` : ''}
-       ${card.example_translation ? `<div class="fc-example-jp">${escapeHtml(card.example_translation)}</div>` : ''}
+    ? `<div class="fc-meaning-lg">${esc(card.meaning)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
+    : `<div class="fc-meaning-lg">${esc(card.meaning)}</div>
+       ${card.example_sentence ? `<div class="fc-example">${esc(card.example_sentence)}</div>` : ''}
+       ${card.example_translation ? `<div class="fc-example-jp">${esc(card.example_translation)}</div>` : ''}
        ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`;
 
   return `
@@ -691,7 +694,7 @@ function renderOniCard(card) {
       <div class="flashcard" style="transform:none;">
         <div class="flashcard-face flashcard-front" style="position:relative;backface-visibility:visible;">
           <div class="fc-number">#${card.sort_order}</div>
-          <div class="fc-meaning-lg">${escapeHtml(card.meaning)}</div>
+          <div class="fc-meaning-lg">${esc(card.meaning)}</div>
           ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}
         </div>
       </div>
@@ -704,84 +707,58 @@ function renderOniCard(card) {
   `;
 }
 
-function renderRatingArea(card) {
-  // Simple mode: show O/X buttons - before flip at lower-right (small), after flip full-width
+function renderRatingArea(card, layout) {
+  const layoutClass = `layout-${layout}`;
+
+  // Simple mode: SAME size/position pre and post flip
   if (State.studyMode === 'simple') {
-    if (!State.isFlipped) {
-      // Pre-flip: small O/X buttons at lower-right
-      return `
-        <div class="rating-area-simple-wrap">
-          <div class="simple-btns-preflip">
-            <button class="simple-btn simple-btn-sm simple-correct" onclick="flipAndRate('good')">
-              <span>⭕</span>
-            </button>
-            <button class="simple-btn simple-btn-sm simple-wrong" onclick="flipAndRate('forgot')">
-              <span>❌</span>
-            </button>
-          </div>
-          <div class="simple-preflip-hint">めくらずに回答 or タップでめくる</div>
+    const preflipClass = State.isFlipped ? 'simple-postflip' : 'simple-preflip';
+    return `
+      <div class="rating-area-wrap ${layoutClass}">
+        <div class="simple-btns ${preflipClass}">
+          <button class="simple-btn simple-correct" onclick="${State.isFlipped ? "rateCard('good')" : "flipAndRate('good')"}"><span>⭕</span></button>
+          <button class="simple-btn simple-wrong" onclick="${State.isFlipped ? "rateCard('forgot')" : "flipAndRate('forgot')"}"><span>❌</span></button>
+          <div class="simple-hint-text">${State.isFlipped ? '回答を選択' : 'めくらずに回答 or タップでめくる'}</div>
         </div>
-      `;
-    } else {
-      // Post-flip: full-width O/X
-      return `
-        <div class="rating-area-simple-wrap">
-          <div class="simple-btns-postflip">
-            <button class="simple-btn simple-btn-lg simple-correct" onclick="rateCard('good')">
-              <span>⭕</span>
-            </button>
-            <button class="simple-btn simple-btn-lg simple-wrong" onclick="rateCard('forgot')">
-              <span>❌</span>
-            </button>
-          </div>
-        </div>
-      `;
-    }
+      </div>
+    `;
   }
 
   // Normal mode: show 2x2 grid only after flip
   if (!State.isFlipped) return '';
 
   return `
-    <div class="rating-grid-2x2">
-      <button class="rating-btn rating-btn-mastered" onclick="rateCard('mastered')">
-        <span class="rating-icon">💎</span>
-        <span>
+    <div class="rating-area-wrap ${layoutClass}">
+      <div class="rating-grid-2x2">
+        <button class="rating-btn rating-btn-mastered" onclick="rateCard('mastered')">
+          <span class="rating-icon">💎</span>
           <span class="rating-label">完全に覚えた</span>
           <span class="rating-hint">非表示</span>
-        </span>
-      </button>
-      <button class="rating-btn rating-btn-good" onclick="rateCard('good')">
-        <span class="rating-icon">👍</span>
-        <span>
+        </button>
+        <button class="rating-btn rating-btn-good" onclick="rateCard('good')">
+          <span class="rating-icon">👍</span>
           <span class="rating-label">普通</span>
           <span class="rating-hint">2日後</span>
-        </span>
-      </button>
-      <button class="rating-btn rating-btn-unsure" onclick="rateCard('unsure')">
-        <span class="rating-icon">🤔</span>
-        <span>
+        </button>
+        <button class="rating-btn rating-btn-unsure" onclick="rateCard('unsure')">
+          <span class="rating-icon">🤔</span>
           <span class="rating-label">自信なし</span>
           <span class="rating-hint">1日後</span>
-        </span>
-      </button>
-      <button class="rating-btn rating-btn-forgot" onclick="rateCard('forgot')">
-        <span class="rating-icon">💀</span>
-        <span>
+        </button>
+        <button class="rating-btn rating-btn-forgot" onclick="rateCard('forgot')">
+          <span class="rating-icon">💀</span>
           <span class="rating-label">完全に忘れた</span>
           <span class="rating-hint">20枚後</span>
-        </span>
-      </button>
+        </button>
+      </div>
     </div>
   `;
 }
 
-// Simple mode: flip and immediately rate
 function flipAndRate(status) {
   State.isFlipped = true;
   render();
-  // Small delay so user sees the back briefly
-  setTimeout(() => rateCard(status), 400);
+  setTimeout(() => rateCard(status), 350);
 }
 
 function flipCard() { State.isFlipped = !State.isFlipped; render(); }
@@ -797,24 +774,24 @@ async function rateCard(status) {
   State.studyIndex++;
   State.isFlipped = false;
   render();
-  if (State.studyMode === 'oni') setTimeout(() => { const input = document.getElementById('oni-input'); if (input) input.focus(); }, 100);
+  if (State.studyMode === 'oni') setTimeout(() => { const i = document.getElementById('oni-input'); if (i) i.focus(); }, 80);
 }
 
 async function checkOniAnswer() {
   const input = document.getElementById('oni-input');
-  const resultDiv = document.getElementById('oni-result');
-  if (!input || !resultDiv) return;
+  const rd = document.getElementById('oni-result');
+  if (!input || !rd) return;
   const card = State.studyQueue[State.studyIndex];
   if (!card) return;
-  const answer = input.value.trim();
-  if (!answer) return;
-  const correct = answer.toLowerCase() === card.word.toLowerCase();
+  const ans = input.value.trim();
+  if (!ans) return;
+  const ok = ans.toLowerCase() === card.word.toLowerCase();
   input.classList.remove('correct', 'wrong');
-  input.classList.add(correct ? 'correct' : 'wrong');
-  resultDiv.innerHTML = correct
-    ? `<span style="color:var(--success);font-weight:700;">⭕ 正解！ ${escapeHtml(card.word)}</span>`
-    : `<span style="color:var(--danger);font-weight:700;">❌ 不正解… 正解: ${escapeHtml(card.word)}</span>`;
-  setTimeout(() => rateCard(correct ? 'good' : 'forgot'), 1200);
+  input.classList.add(ok ? 'correct' : 'wrong');
+  rd.innerHTML = ok
+    ? `<span style="color:var(--success);font-weight:700;">⭕ 正解！ ${esc(card.word)}</span>`
+    : `<span style="color:var(--danger);font-weight:700;">❌ 不正解… 正解: ${esc(card.word)}</span>`;
+  setTimeout(() => rateCard(ok ? 'good' : 'forgot'), 1000);
 }
 
 function undoLastRating() {
@@ -843,8 +820,7 @@ function toggleOrder() {
     remaining.sort((a, b) => a.sort_order - b.sort_order);
     State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...remaining];
   } else {
-    const newQueue = buildStudyQueue(remaining, progress, 'srs');
-    State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...newQueue];
+    State.studyQueue = [...State.studyQueue.slice(0, State.studyIndex), ...buildStudyQueue(remaining, progress, 'srs')];
   }
   render();
   showToast(`${State.orderMode === 'random' ? 'ランダム' : State.orderMode === 'sequential' ? '番号順' : 'SRS順'}に切り替え`, 'info');
@@ -852,19 +828,35 @@ function toggleOrder() {
 
 async function endStudySession() {
   if (State.sessionCards > 0) {
-    const duration = Math.round((Date.now() - State.sessionStart) / 1000);
-    try { await API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: duration }); } catch {}
+    const dur = Math.round((Date.now() - State.sessionStart) / 1000);
+    StudyHistory.add({
+      deckId: State.currentDeck?.id,
+      deckName: State.currentDeck?.name || '不明',
+      mode: State.studyMode,
+      cardsStudied: State.sessionCards,
+      correctCount: State.sessionCorrect,
+      duration: dur
+    });
+    try { await API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: dur }); } catch {}
   }
   openDeck(State.currentDeck.id);
 }
 
 function renderStudyComplete() {
-  const duration = State.sessionStart ? Math.round((Date.now() - State.sessionStart) / 1000) : 0;
-  const mins = Math.floor(duration / 60);
-  const secs = duration % 60;
-  const accuracy = State.sessionCards > 0 ? Math.round((State.sessionCorrect / State.sessionCards) * 100) : 0;
+  const dur = State.sessionStart ? Math.round((Date.now() - State.sessionStart) / 1000) : 0;
+  const mins = Math.floor(dur / 60);
+  const secs = dur % 60;
+  const acc = State.sessionCards > 0 ? Math.round((State.sessionCorrect / State.sessionCards) * 100) : 0;
   if (State.sessionCards > 0) {
-    API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: duration }).catch(() => {});
+    StudyHistory.add({
+      deckId: State.currentDeck?.id,
+      deckName: State.currentDeck?.name || '不明',
+      mode: State.studyMode,
+      cardsStudied: State.sessionCards,
+      correctCount: State.sessionCorrect,
+      duration: dur
+    });
+    API.post('/sessions', { deckId: State.currentDeck?.id, mode: State.studyMode, cardsStudied: State.sessionCards, correctCount: State.sessionCorrect, durationSeconds: dur }).catch(() => {});
   }
   return `
     <div class="fade-in" style="text-align:center;padding-top:24px;">
@@ -873,7 +865,7 @@ function renderStudyComplete() {
       <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.85rem;">お疲れ様でした！</p>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-value">${State.sessionCards}</div><div class="stat-label">学習カード</div></div>
-        <div class="stat-card"><div class="stat-value">${accuracy}%</div><div class="stat-label">正答率</div></div>
+        <div class="stat-card"><div class="stat-value">${acc}%</div><div class="stat-label">正答率</div></div>
         <div class="stat-card"><div class="stat-value">${mins}:${secs.toString().padStart(2, '0')}</div><div class="stat-label">学習時間</div></div>
         <div class="stat-card"><div class="stat-value">${State.sessionCorrect}</div><div class="stat-label">正解数</div></div>
       </div>
@@ -881,6 +873,42 @@ function renderStudyComplete() {
         <button class="btn btn-primary btn-lg" onclick="startStudy(State.studyMode)"><i class="fas fa-redo"></i> もう一度学習</button>
         <button class="btn btn-lg" onclick="openDeck('${State.currentDeck?.id}')"><i class="fas fa-arrow-left"></i> 単語帳に戻る</button>
       </div>
+    </div>
+  `;
+}
+
+// ===== Study History =====
+function renderHistoryView() {
+  const hist = StudyHistory.get();
+  return `
+    <div class="fade-in">
+      <div class="page-title-row">
+        <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
+        <h2 class="section-title" style="margin:0;">学習履歴</h2>
+        ${hist.length > 0 ? `<button class="btn btn-sm btn-ghost" onclick="if(confirm('履歴をすべて削除しますか？')){StudyHistory.clear();render();}"><i class="fas fa-trash"></i></button>` : ''}
+      </div>
+      ${hist.length === 0 ? `
+        <div class="empty-state"><div class="empty-icon">📖</div><div class="empty-text">まだ学習履歴がありません</div></div>
+      ` : `
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${hist.map(h => {
+            const mLabels = { normal: 'ノーマル', simple: 'シンプル', oni: '🔥鬼' };
+            const d = new Date(h.timestamp);
+            const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+            const acc = h.cardsStudied > 0 ? Math.round((h.correctCount / h.cardsStudied) * 100) : 0;
+            return `
+              <div class="history-item" onclick="openDeck('${h.deckId}')">
+                <div class="history-icon"><i class="fas fa-book-open"></i></div>
+                <div class="history-info">
+                  <div class="history-name">${esc(h.deckName)}</div>
+                  <div class="history-meta">${dateStr} · ${mLabels[h.mode] || h.mode} · ${h.cardsStudied}枚 · ${acc}%正解 · ${fmtTime(h.duration)}</div>
+                </div>
+                <i class="fas fa-chevron-right" style="color:var(--text-tertiary);font-size:0.7rem;flex-shrink:0;"></i>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
     </div>
   `;
 }
@@ -913,27 +941,27 @@ function handleFileImport(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
   importedCards = [];
-  let filesProcessed = 0;
+  let done = 0;
   Array.from(files).forEach(file => {
     const reader = new FileReader();
     reader.onload = (e) => {
       importedCards = importedCards.concat(parseCSV(e.target.result));
-      filesProcessed++;
-      if (filesProcessed === files.length) showImportPreview();
+      done++;
+      if (done === files.length) showImportPreview();
     };
     reader.readAsText(file);
   });
 }
 
 function showImportPreview() {
-  const preview = document.getElementById('import-preview');
-  if (!preview) return;
-  if (importedCards.length === 0) { preview.innerHTML = `<div class="card" style="text-align:center;color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりません</div>`; return; }
-  preview.innerHTML = `
+  const p = document.getElementById('import-preview');
+  if (!p) return;
+  if (importedCards.length === 0) { p.innerHTML = '<div class="card" style="text-align:center;color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりません</div>'; return; }
+  p.innerHTML = `
     <div class="card" style="padding:12px;">
       <div style="font-weight:700;margin-bottom:4px;">${importedCards.length}語を検出</div>
       <div style="max-height:160px;overflow-y:auto;">
-        ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${escapeHtml(c.word)}</div><div class="card-list-meaning">${escapeHtml(c.meaning)}</div></div>`).join('')}
+        ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${esc(c.word)}</div><div class="card-list-meaning">${esc(c.meaning)}</div></div>`).join('')}
         ${importedCards.length > 8 ? `<div style="text-align:center;padding:5px;color:var(--text-tertiary);font-size:0.78rem;">…他 ${importedCards.length - 8}語</div>` : ''}
       </div>
     </div>
@@ -943,9 +971,9 @@ function showImportPreview() {
 async function executeImport() {
   const name = document.getElementById('import-name')?.value?.trim();
   const desc = document.getElementById('import-desc')?.value?.trim() || '';
-  const textArea = document.getElementById('import-text')?.value?.trim();
+  const ta = document.getElementById('import-text')?.value?.trim();
   if (!name) { showToast('単語帳の名前を入力してください', 'error'); return; }
-  if (importedCards.length === 0 && textArea) importedCards = parseCSV(textArea);
+  if (importedCards.length === 0 && ta) importedCards = parseCSV(ta);
   if (importedCards.length === 0) { showToast('インポートする単語がありません', 'error'); return; }
   try {
     const data = await API.post('/decks', { name, description: desc, isPublic: false, cards: importedCards });
@@ -969,38 +997,37 @@ function renderStats() {
 }
 
 async function loadStats() {
-  const container = document.getElementById('stats-content');
-  if (!container) return;
+  const c = document.getElementById('stats-content');
+  if (!c) return;
   if (!State.user) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">統計はログインが必要です</div><button class="btn btn-primary" onclick="navigate('auth')" style="margin-top:10px;"><i class="fas fa-sign-in-alt"></i> ログイン</button></div>`;
+    c.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">統計はログインが必要です</div><button class="btn btn-primary" onclick="navigate(\'auth\')" style="margin-top:10px;"><i class="fas fa-sign-in-alt"></i> ログイン</button></div>';
     return;
   }
   try {
     const data = await API.get('/stats');
-    State.stats = data.stats;
-    if (!State.stats) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">まだ学習データがありません</div></div>'; return; }
-    const s = State.stats;
-    const streakInfo = getStreakInfo(s.currentStreak);
-    const maxCards = Math.max(...(s.weeklyData || []).map(d => d.cards), 1);
+    const s = data.stats;
+    if (!s) { c.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">まだ学習データがありません</div></div>'; return; }
+    const si = getStreakInfo(s.currentStreak);
+    const mx = Math.max(...(s.weeklyData || []).map(d => d.cards), 1);
     const days = ['日','月','火','水','木','金','土'];
-    const distMap = {};
-    (s.distribution || []).forEach(d => { distMap[d.status] = d.count; });
-    const totalDist = Object.values(distMap).reduce((a, b) => a + b, 0) || 1;
-    container.innerHTML = `
+    const dm = {};
+    (s.distribution || []).forEach(d => { dm[d.status] = d.count; });
+    const td = Object.values(dm).reduce((a, b) => a + b, 0) || 1;
+    c.innerHTML = `
       <div class="streak-display">
-        <div class="streak-badge ${streakInfo.cls}">${streakInfo.emoji}</div>
+        <div class="streak-badge ${si.cls}">${si.emoji}</div>
         <div class="streak-number">${s.currentStreak}</div>
-        <div class="streak-label">連続学習日数 · ${streakInfo.label}</div>
+        <div class="streak-label">連続学習日数 · ${si.label}</div>
       </div>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-value">${s.totalStudied || 0}</div><div class="stat-label">総学習カード</div></div>
         <div class="stat-card"><div class="stat-value">${s.accuracy}%</div><div class="stat-label">正答率</div></div>
         <div class="stat-card"><div class="stat-value">${s.masteredCards}</div><div class="stat-label">習得済み</div></div>
-        <div class="stat-card"><div class="stat-value">${formatTime(s.totalTime || 0)}</div><div class="stat-label">総学習時間</div></div>
+        <div class="stat-card"><div class="stat-value">${fmtTime(s.totalTime || 0)}</div><div class="stat-label">総学習時間</div></div>
       </div>
       <div class="section-title">週間学習グラフ</div>
       <div class="weekly-chart">
-        ${(s.weeklyData||[]).map(d => { const h = Math.max(4, Math.round((d.cards/maxCards)*70)); const dn = days[new Date(d.study_date).getDay()]; return `<div class="chart-bar-wrapper"><div class="chart-bar" style="height:${h}px;"></div><div class="chart-label">${dn}</div></div>`; }).join('')}
+        ${(s.weeklyData||[]).map(d => { const h = Math.max(4, Math.round((d.cards/mx)*70)); const dn = days[new Date(d.study_date).getDay()]; return `<div class="chart-bar-wrapper"><div class="chart-bar" style="height:${h}px;"></div><div class="chart-label">${dn}</div></div>`; }).join('')}
         ${(s.weeklyData||[]).length===0 ? '<div style="flex:1;text-align:center;color:var(--text-tertiary);font-size:0.8rem;align-self:center;">データなし</div>' : ''}
       </div>
       <div class="section-title">習熟度分布</div>
@@ -1008,11 +1035,11 @@ async function loadStats() {
         ${['mastered','good','unsure','forgot'].map(k => {
           const labels = {mastered:'習得済み',good:'普通',unsure:'自信なし',forgot:'忘れた'};
           const colors = {mastered:'var(--success)',good:'var(--info)',unsure:'var(--warning)',forgot:'var(--danger)'};
-          return `<div class="dist-row"><div class="dist-label">${labels[k]}</div><div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(distMap[k]||0)/totalDist*100}%;background:${colors[k]};"></div></div><div class="dist-count">${distMap[k]||0}</div></div>`;
+          return `<div class="dist-row"><div class="dist-label">${labels[k]}</div><div class="dist-bar-track"><div class="dist-bar-fill" style="width:${(dm[k]||0)/td*100}%;background:${colors[k]};"></div></div><div class="dist-count">${dm[k]||0}</div></div>`;
         }).join('')}
       </div>
     `;
-  } catch (e) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
+  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
 }
 
 // ===== Settings =====
@@ -1023,6 +1050,15 @@ function renderSettings() {
     { id: 'dark-forest', name: 'Dark Forest', preview: 'theme-preview-forest' },
     { id: 'white-pearl', name: 'White Pearl', preview: 'theme-preview-white' },
     { id: 'dreamy', name: 'Dreamy', preview: 'theme-preview-dreamy' },
+    { id: 'midnight-ocean', name: 'Midnight Ocean', preview: 'theme-preview-ocean' },
+    { id: 'sakura', name: 'Sakura', preview: 'theme-preview-sakura' },
+    { id: 'aurora', name: 'Aurora', preview: 'theme-preview-aurora' },
+    { id: 'cyber-neon', name: 'Cyber Neon', preview: 'theme-preview-cyber' },
+  ];
+  const layouts = [
+    { id: 'right', name: '右下 正方形', icon: '◳' },
+    { id: 'bottom', name: '下部 横長', icon: '▭' },
+    { id: 'left', name: '左下 正方形', icon: '◰' },
   ];
   return `
     <div class="fade-in">
@@ -1030,7 +1066,18 @@ function renderSettings() {
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
         <h2 class="section-title" style="margin:0;">設定</h2>
       </div>
-      <div class="section-title">テーマ</div>
+
+      <div class="section-title">ボタン配置</div>
+      <div class="layout-grid">
+        ${layouts.map(l => `
+          <div class="layout-option ${State.buttonLayout===l.id?'active':''}" onclick="setButtonLayout('${l.id}');render();">
+            <div class="layout-icon">${l.icon}</div>
+            <div class="layout-label">${l.name}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="section-title" style="margin-top:14px;">テーマ</div>
       <div class="theme-grid">
         ${themes.map(t => `
           <div class="theme-option ${State.theme===t.id?'active':''}" onclick="applyTheme('${t.id}');render();">
@@ -1039,6 +1086,7 @@ function renderSettings() {
           </div>
         `).join('')}
       </div>
+
       ${State.user ? `
         <div class="section-title" style="margin-top:16px;">アカウント</div>
         <div class="card" style="display:flex;align-items:center;gap:10px;">
@@ -1048,7 +1096,7 @@ function renderSettings() {
         </div>
       ` : ''}
       <div class="section-title" style="margin-top:16px;">アプリについて</div>
-      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;"><strong>Neomemoria</strong> v3.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
+      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;"><strong>Neomemoria</strong> v4.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
     </div>
   `;
 }
@@ -1066,17 +1114,48 @@ function renderAuth() {
     </div>
   `;
 }
+
 function renderLoginForm() {
-  return `<div class="input-group"><label class="input-label">ユーザー名</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div><div class="input-group"><label class="input-label">パスワード</label><input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()"></div><button class="btn btn-primary btn-lg" onclick="handleLogin()" style="width:100%;"><i class="fas fa-sign-in-alt"></i> ログイン</button>`;
+  return `
+    <div class="input-group"><label class="input-label">ユーザー名</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div>
+    <div class="input-group"><label class="input-label">パスワード</label>
+      <div class="pw-wrap">
+        <input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
+        <button type="button" class="pw-toggle" onclick="togglePw('auth-password',this)" aria-label="パスワード表示切替"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="handleLogin()" style="width:100%;"><i class="fas fa-sign-in-alt"></i> ログイン</button>
+  `;
 }
+
 function renderRegisterForm() {
-  return `<div class="input-group"><label class="input-label">ユーザー名（3〜30文字）</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div><div class="input-group"><label class="input-label">表示名（任意）</label><input type="text" class="input" id="auth-display" placeholder="表示名"></div><div class="input-group"><label class="input-label">パスワード（6文字以上）</label><input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')handleRegister()"></div><button class="btn btn-primary btn-lg" onclick="handleRegister()" style="width:100%;"><i class="fas fa-user-plus"></i> アカウント作成</button>`;
+  return `
+    <div class="input-group"><label class="input-label">ユーザー名（3〜30文字）</label><input type="text" class="input" id="auth-username" placeholder="username" autocomplete="username"></div>
+    <div class="input-group"><label class="input-label">表示名（任意）</label><input type="text" class="input" id="auth-display" placeholder="表示名"></div>
+    <div class="input-group"><label class="input-label">パスワード（6文字以上）</label>
+      <div class="pw-wrap">
+        <input type="password" class="input" id="auth-password" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')handleRegister()">
+        <button type="button" class="pw-toggle" onclick="togglePw('auth-password',this)" aria-label="パスワード表示切替"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="handleRegister()" style="width:100%;"><i class="fas fa-user-plus"></i> アカウント作成</button>
+  `;
 }
+
+function togglePw(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const isHidden = inp.type === 'password';
+  inp.type = isHidden ? 'text' : 'password';
+  btn.innerHTML = isHidden ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+}
+
 function switchAuthTab(tab) {
   const tabs = document.querySelectorAll('#auth-tabs .tab');
   tabs.forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
   document.getElementById('auth-form').innerHTML = tab==='login' ? renderLoginForm() : renderRegisterForm();
 }
+
 async function handleLogin() {
   const u = document.getElementById('auth-username')?.value?.trim();
   const p = document.getElementById('auth-password')?.value;
@@ -1102,7 +1181,7 @@ function renderPublish() {
         <h2 class="section-title" style="margin:0;">公開設定</h2>
       </div>
       <div class="card">
-        <div style="font-weight:700;margin-bottom:8px;">${escapeHtml(deck.name)}</div>
+        <div style="font-weight:700;margin-bottom:8px;">${esc(deck.name)}</div>
         <div style="margin-bottom:12px;"><span class="badge ${deck.is_public?'badge-success':'badge-warning'}">${deck.is_public?'🌐 公開中':'🔒 非公開'}</span></div>
         <button class="btn ${deck.is_public?'btn-danger':'btn-primary'} btn-lg" onclick="togglePublish('${deck.id}',${deck.is_public})" style="width:100%;"><i class="fas fa-${deck.is_public?'lock':'globe'}"></i> ${deck.is_public?'非公開にする':'公開する'}</button>
       </div>
@@ -1117,9 +1196,9 @@ async function togglePublish(deckId, isPublic) {
 
 // ===== Deck Management =====
 async function renameDeck(deckId, currentName) {
-  const newName = prompt('新しい名前:', currentName);
-  if (!newName || newName === currentName) return;
-  try { await API.put(`/decks/${deckId}`, { name: newName }); showToast('名前変更しました','success'); loadMyDecks(); } catch(e) { showToast(e.message,'error'); }
+  const n = prompt('新しい名前:', currentName);
+  if (!n || n === currentName) return;
+  try { await API.put(`/decks/${deckId}`, { name: n }); showToast('名前変更しました','success'); loadMyDecks(); } catch(e) { showToast(e.message,'error'); }
 }
 async function confirmDeleteDeck(deckId, deckName) {
   if (!confirm(`「${deckName}」を削除しますか？`)) return;
@@ -1141,7 +1220,7 @@ async function editCard(cardId) {
   const card = State.currentCards.find(c=>c.id===cardId);
   if(!card)return;
   const m=document.createElement('div');m.className='modal-overlay';m.id='edit-card-modal';
-  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を編集</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語</label><input type="text" class="input" id="edit-word" value="${escapeHtml(card.word)}"></div><div class="input-group"><label class="input-label">意味</label><input type="text" class="input" id="edit-meaning" value="${escapeHtml(card.meaning)}"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="edit-example" value="${escapeHtml(card.example_sentence||'')}"></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="edit-translation" value="${escapeHtml(card.example_translation||'')}"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="edit-emoji" value="${escapeHtml(card.emoji||'')}"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button></div></div>`;
+  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を編集</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語</label><input type="text" class="input" id="edit-word" value="${esc(card.word)}"></div><div class="input-group"><label class="input-label">意味</label><input type="text" class="input" id="edit-meaning" value="${esc(card.meaning)}"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="edit-example" value="${esc(card.example_sentence||'')}"></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="edit-translation" value="${esc(card.example_translation||'')}"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="edit-emoji" value="${esc(card.emoji||'')}"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button></div></div>`;
   document.body.appendChild(m);
 }
 async function saveEditCard(cardId) {
@@ -1155,16 +1234,21 @@ async function resetCard(cardId) {
   try{if(State.user){await API.post('/progress/reset',{cardId});delete State.currentProgress[cardId];}else{localStorage.removeItem(`vf_prog_${cardId}`);}showToast('未習得に戻しました','success');render();}catch(e){showToast(e.message,'error');}
 }
 
-// ===== Utilities =====
-function escapeHtml(str) { if(!str)return''; const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
-function formatDate(dateStr) { if(!dateStr)return''; const d=new Date(dateStr); return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`; }
-function formatTime(seconds) { if(seconds<60)return`${seconds}秒`; if(seconds<3600)return`${Math.floor(seconds/60)}分`; return`${Math.floor(seconds/3600)}時間${Math.floor((seconds%3600)/60)}分`; }
+// ===== Utilities (shortened names for perf) =====
+function esc(str) { if(!str)return''; const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
+function fmtDate(ds) { if(!ds)return''; const d=new Date(ds); return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`; }
+function fmtTime(s) { if(s<60)return`${s}秒`; if(s<3600)return`${Math.floor(s/60)}分`; return`${Math.floor(s/3600)}時間${Math.floor((s%3600)/60)}分`; }
+
+// Keep old names as aliases for backward compat
+const escapeHtml = esc;
+const formatDate = fmtDate;
+const formatTime = fmtTime;
 
 function attachEventListeners() {
-  if (State.currentView==='browse') setTimeout(()=>loadPublicDecks(),50);
-  if (State.currentView==='mydecks') setTimeout(()=>loadMyDecks(),50);
-  if (State.currentView==='stats') setTimeout(()=>loadStats(),50);
-  if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},100);
+  if (State.currentView==='browse') setTimeout(()=>loadPublicDecks(),30);
+  if (State.currentView==='mydecks') setTimeout(()=>loadMyDecks(),30);
+  if (State.currentView==='stats') setTimeout(()=>loadStats(),30);
+  if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},80);
 }
 
 // ===== Init =====
