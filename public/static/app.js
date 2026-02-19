@@ -327,7 +327,7 @@ function renderMenu() {
       <button class="menu-item" onclick="navigate('home');toggleMenu();"><i class="fas fa-home"></i>ホーム</button>
       <button class="menu-item" onclick="navigate('browse');toggleMenu();"><i class="fas fa-globe"></i>公開単語帳を探す</button>
       <button class="menu-item" onclick="navigate('mydecks');toggleMenu();"><i class="fas fa-book"></i>マイ単語帳</button>
-      <button class="menu-item" onclick="navigate('import');toggleMenu();"><i class="fas fa-file-import"></i>CSVインポート</button>
+      <button class="menu-item" onclick="navigate('import');toggleMenu();"><i class="fas fa-file-import"></i>ファイルインポート</button>
       <button class="menu-item" onclick="navigate('history');toggleMenu();"><i class="fas fa-history"></i>学習履歴</button>
       <div class="menu-divider"></div>
       <button class="menu-item" onclick="navigate('stats');toggleMenu();"><i class="fas fa-chart-bar"></i>統計情報</button>
@@ -346,10 +346,7 @@ function toggleMenu() { State.menuOpen = !State.menuOpen; render(); }
 function renderHome() {
   return `
     <div class="fade-in" style="padding-top:2px;">
-      <div style="text-align:center;margin-bottom:16px;">
-        <h1 style="font-size:1.4rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:3px;">英単語を、確実に覚える。</h1>
-        <p style="font-size:0.82rem;color:var(--text-secondary);">科学的な間隔反復で効率的に学習</p>
-      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
         <button class="btn btn-lg btn-primary" onclick="navigate('browse')" style="flex-direction:column;padding:20px 12px;">
           <i class="fas fa-globe" style="font-size:1.3rem;margin-bottom:3px;"></i>
@@ -919,14 +916,16 @@ function renderImport() {
     <div class="fade-in">
       <div class="page-title-row">
         <button class="btn-icon btn-ghost" onclick="navigate('home')"><i class="fas fa-arrow-left"></i></button>
-        <h2 class="section-title" style="margin:0;">CSVインポート</h2>
+        <h2 class="section-title" style="margin:0;">ファイルインポート</h2>
       </div>
       <div class="input-group"><label class="input-label">単語帳の名前 *</label><input type="text" class="input" id="import-name" placeholder="例: TOEIC 頻出単語 500"></div>
       <div class="input-group"><label class="input-label">説明（任意）</label><input type="text" class="input" id="import-desc" placeholder="単語帳の説明"></div>
       <div class="file-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
         <i class="fas fa-cloud-upload-alt"></i>
-        <div class="file-drop-text">CSVファイルをタップして選択</div>
-        <div class="file-drop-sub">形式: No,単語,意味,例文,和訳,絵文字（例文以降は任意）</div>
+        <div class="file-drop-text">CSV / TXT ファイルをタップして選択</div>
+        <div class="file-drop-sub">対応形式: CSV (.csv) / テキスト (.txt) / TSV (.tsv)</div>
+        <div class="file-drop-sub" style="margin-top:2px;">形式: No,単語,意味,例文,和訳,絵文字（例文以降は任意）</div>
+        <div class="file-drop-sub" style="margin-top:1px;"><i class="fas fa-info-circle" style="margin-right:3px;"></i>テキストファイル (.txt) もカンマ区切り・タブ区切りでインポートできます</div>
       </div>
       <input type="file" class="file-input-hidden" id="file-input" accept=".csv,.txt,.tsv" multiple onchange="handleFileImport(event)">
       <div style="margin-top:10px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="4" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎"></textarea></div>
@@ -1095,8 +1094,6 @@ function renderSettings() {
           <button class="btn btn-danger btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
         </div>
       ` : ''}
-      <div class="section-title" style="margin-top:16px;">アプリについて</div>
-      <div class="card"><div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;"><strong>Neomemoria</strong> v4.0<br>科学的間隔反復法を使った英単語学習アプリ<br>Cloudflare Workers + Hono + D1 で構築</div></div>
     </div>
   `;
 }
@@ -1251,7 +1248,24 @@ function attachEventListeners() {
   if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},80);
 }
 
+// ===== Black Pearl Effect (periodic button flash) =====
+function initBlackPearlEffect() {
+  function flashButtons() {
+    const buttons = document.querySelectorAll('.btn, .btn-primary, .btn-sm, .btn-lg, .menu-item, .rating-btn, .simple-btn');
+    if (buttons.length === 0) return;
+    const idx = Math.floor(Math.random() * Math.min(buttons.length, 5));
+    for (let i = 0; i < Math.min(3, buttons.length); i++) {
+      const bi = (idx + i) % buttons.length;
+      const btn = buttons[bi];
+      btn.classList.add('pearl-flash');
+      setTimeout(() => btn.classList.remove('pearl-flash'), 600);
+    }
+  }
+  setInterval(flashButtons, 4000);
+  setTimeout(flashButtons, 2000);
+}
+
 // ===== Init =====
-async function init() { applyTheme(State.theme); await initAuth(); render(); }
+async function init() { applyTheme(State.theme); await initAuth(); render(); initBlackPearlEffect(); }
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();

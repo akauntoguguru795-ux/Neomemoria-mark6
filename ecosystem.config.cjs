@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'vocabflash',
+      name: 'neomemoria',
       script: 'npx',
       args: 'wrangler pages dev dist --d1=vocabflash-production --local --ip 0.0.0.0 --port 3000',
       env: {

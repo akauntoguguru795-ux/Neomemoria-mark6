@@ -1,12 +1,14 @@
 /* ============================================================
-   Neomemoria - Premium UI System v4.0
+   Neomemoria - Premium UI System v5.0
    - 3 button layout options (right-bottom / bottom-wide / left-bottom)
    - Enlarged rating buttons
    - Simple mode fixed position pre/post flip
    - Performance optimized (reduced repaints)
-   - 9 premium themes with breathtaking effects
+   - 9 premium themes with breathtaking unique effects
    - Study history support
    - Password toggle support
+   - Black Pearl flash effect on buttons
+   - Enhanced theme-specific visual identity
    ============================================================ */
 
 :root {
@@ -851,6 +853,98 @@ body {
 @keyframes sparkle { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.6;transform:scale(1.15);} }
 .streak-sparkle { animation:sparkle 2s ease-in-out infinite; }
 
+/* ===== Black Pearl Flash Effect (periodic button shimmer) ===== */
+@keyframes pearlFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(180,180,255,0.35), 0 0 20px 4px rgba(140,120,255,0.15), inset 0 0 6px rgba(200,200,255,0.1); }
+  50% { box-shadow: 0 0 14px 4px rgba(200,200,255,0.45), 0 0 30px 8px rgba(160,140,255,0.2), inset 0 0 10px rgba(220,220,255,0.15); }
+  80% { box-shadow: 0 0 6px 1px rgba(180,180,255,0.2), 0 0 14px 3px rgba(140,120,255,0.08); }
+  100% { box-shadow: inherit; }
+}
+.pearl-flash {
+  animation: pearlFlash 0.6s ease-out !important;
+  position: relative;
+}
+.pearl-flash::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(200,200,255,0.15), transparent 40%, rgba(160,140,255,0.1), transparent 70%, rgba(200,200,255,0.12));
+  pointer-events: none;
+  opacity: 0;
+  animation: pearlOverlayFlash 0.6s ease-out;
+}
+@keyframes pearlOverlayFlash {
+  0% { opacity:0; }
+  30% { opacity:1; }
+  100% { opacity:0; }
+}
+/* Theme-specific pearl flash colors */
+[data-theme="dark-forest"] .pearl-flash {
+  animation-name: forestFlash !important;
+}
+@keyframes forestFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(232,180,42,0.35), 0 0 20px 4px rgba(232,134,42,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(255,200,60,0.4), 0 0 30px 8px rgba(232,160,42,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="aurora"] .pearl-flash {
+  animation-name: auroraFlash !important;
+}
+@keyframes auroraFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(64,216,160,0.4), 0 0 20px 4px rgba(80,160,232,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(64,232,180,0.45), 0 0 30px 8px rgba(100,180,255,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="cyber-neon"] .pearl-flash {
+  animation-name: neonFlash !important;
+}
+@keyframes neonFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(224,64,192,0.4), 0 0 20px 4px rgba(64,192,255,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(255,80,220,0.45), 0 0 30px 8px rgba(80,210,255,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="sakura"] .pearl-flash {
+  animation-name: sakuraFlash !important;
+}
+@keyframes sakuraFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(232,112,90,0.35), 0 0 20px 4px rgba(240,160,140,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(255,130,110,0.4), 0 0 30px 8px rgba(255,180,160,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="dreamy"] .pearl-flash {
+  animation-name: dreamyFlash !important;
+}
+@keyframes dreamyFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(224,122,170,0.35), 0 0 20px 4px rgba(200,160,240,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(240,140,190,0.4), 0 0 30px 8px rgba(220,180,255,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="midnight-ocean"] .pearl-flash {
+  animation-name: oceanFlash !important;
+}
+@keyframes oceanFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(68,136,238,0.4), 0 0 20px 4px rgba(68,170,255,0.15); }
+  50% { box-shadow: 0 0 14px 4px rgba(80,150,255,0.45), 0 0 30px 8px rgba(100,180,255,0.2); }
+  100% { box-shadow: inherit; }
+}
+[data-theme="white-pearl"] .pearl-flash {
+  animation-name: whitePearlFlash !important;
+}
+@keyframes whitePearlFlash {
+  0% { box-shadow: inherit; }
+  20% { box-shadow: 0 0 8px 2px rgba(122,90,170,0.25), 0 0 20px 4px rgba(160,130,200,0.12); }
+  50% { box-shadow: 0 0 14px 4px rgba(140,110,200,0.35), 0 0 30px 8px rgba(180,150,220,0.15); }
+  100% { box-shadow: inherit; }
+}
+
 .weekly-chart { display:flex; align-items:flex-end; gap:6px; height:90px; padding:12px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:12px; }
 .chart-bar-wrapper { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end; }
 .chart-bar { width:100%; max-width:30px; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; transition:height 0.5s ease; }
@@ -976,6 +1070,181 @@ body {
 @keyframes slideDown { from{transform:translateY(-20px);opacity:0;} to{transform:translateY(0);opacity:1;} }
 @keyframes spin { to{transform:rotate(360deg);} }
 .fade-in { animation:fadeIn 0.2s ease; }
+
+/* ===== Enhanced Theme-Specific Visual Identity ===== */
+
+/* Gleaming Pearl: iridescent hover effect on cards */
+[data-theme="gleaming-pearl"] .deck-item:hover,
+[data-theme="gleaming-pearl"] .card:hover {
+  box-shadow: 0 0 30px rgba(106,106,255,0.08), 0 0 60px rgba(180,120,255,0.04);
+  border-color: rgba(130,130,255,0.35);
+}
+[data-theme="gleaming-pearl"] .btn-primary {
+  background: linear-gradient(135deg, #5a5aff, #7a6aff, #6a6aff);
+  border-color: #7a7aff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+[data-theme="gleaming-pearl"] .logo-icon {
+  background: linear-gradient(135deg, rgba(106,106,255,0.2), rgba(180,120,255,0.15));
+  box-shadow: 0 0 12px rgba(106,106,255,0.15);
+}
+
+/* Dark Forest: warm firelight glow & organic feel */
+[data-theme="dark-forest"] .deck-item:hover,
+[data-theme="dark-forest"] .card:hover {
+  box-shadow: 0 4px 24px rgba(232,134,42,0.08), 0 0 40px rgba(232,100,30,0.03);
+  border-color: rgba(232,134,42,0.3);
+}
+[data-theme="dark-forest"] .btn-primary {
+  background: linear-gradient(135deg, #d07020, #e88630, #e8782a);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 12px rgba(232,134,42,0.2);
+}
+[data-theme="dark-forest"] .logo-icon {
+  box-shadow: 0 0 12px rgba(232,134,42,0.2);
+}
+[data-theme="dark-forest"] .study-mode-card:hover {
+  box-shadow: 0 4px 20px rgba(232,120,30,0.06);
+}
+
+/* White Pearl: subtle shimmer, refined elegance */
+[data-theme="white-pearl"] .btn-primary {
+  background: linear-gradient(135deg, #7050a0, #8a6aba, #7a5aaa);
+  box-shadow: 0 2px 10px rgba(122,90,170,0.15);
+}
+[data-theme="white-pearl"] .deck-item:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+[data-theme="white-pearl"] .header {
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Dreamy: soft pastel glows & floating feel */
+[data-theme="dreamy"] .btn-primary {
+  background: linear-gradient(135deg, #d068a0, #e88aba, #e07aaa);
+  box-shadow: 0 2px 14px rgba(224,122,170,0.2);
+  text-shadow: 0 1px 2px rgba(100,0,50,0.2);
+}
+[data-theme="dreamy"] .deck-item:hover {
+  box-shadow: 0 4px 20px rgba(200,100,150,0.08);
+  border-color: rgba(224,122,170,0.3);
+}
+[data-theme="dreamy"] .flashcard-front,
+[data-theme="dreamy"] .flashcard-back {
+  background: linear-gradient(145deg, #fff8fb, #fef2f7, #fff5f9);
+}
+[data-theme="dreamy"] .logo-icon {
+  background: linear-gradient(135deg, rgba(224,122,170,0.15), rgba(200,160,240,0.12));
+}
+
+/* Midnight Ocean: deep sea luminescence */
+[data-theme="midnight-ocean"] .btn-primary {
+  background: linear-gradient(135deg, #3878dd, #5598ff, #4488ee);
+  box-shadow: 0 2px 16px rgba(68,136,238,0.25);
+  text-shadow: 0 1px 3px rgba(0,0,40,0.4);
+}
+[data-theme="midnight-ocean"] .deck-item:hover {
+  box-shadow: 0 4px 24px rgba(68,136,238,0.08);
+  border-color: rgba(68,136,238,0.3);
+}
+[data-theme="midnight-ocean"] .logo-icon {
+  background: linear-gradient(135deg, rgba(68,136,238,0.2), rgba(68,170,255,0.12));
+  box-shadow: 0 0 12px rgba(68,136,238,0.15);
+}
+[data-theme="midnight-ocean"] .streak-number { color: #5598ff; }
+
+/* Sakura: warm petals & Japanese aesthetic */
+[data-theme="sakura"] .btn-primary {
+  background: linear-gradient(135deg, #d8604a, #f0806a, #e8705a);
+  box-shadow: 0 2px 12px rgba(232,112,90,0.2);
+  text-shadow: 0 1px 2px rgba(80,20,10,0.25);
+}
+[data-theme="sakura"] .deck-item:hover {
+  box-shadow: 0 4px 20px rgba(232,112,90,0.08);
+  border-color: rgba(232,112,90,0.25);
+}
+[data-theme="sakura"] .logo-icon {
+  background: linear-gradient(135deg, rgba(232,112,90,0.15), rgba(240,160,140,0.1));
+  box-shadow: 0 0 10px rgba(232,112,90,0.12);
+}
+[data-theme="sakura"] .flashcard-front,
+[data-theme="sakura"] .flashcard-back {
+  background: linear-gradient(145deg, #fffaf7, #fef4ee, #fff8f4);
+}
+
+/* Aurora Borealis: northern lights dancing */
+[data-theme="aurora"] .btn-primary {
+  background: linear-gradient(135deg, #30c890, #50e8b0, #40d8a0);
+  box-shadow: 0 2px 16px rgba(64,216,160,0.25);
+  text-shadow: 0 1px 3px rgba(0,30,20,0.4);
+}
+[data-theme="aurora"] .deck-item:hover {
+  box-shadow: 0 0 20px rgba(64,216,160,0.08), 0 0 40px rgba(80,120,232,0.04);
+  border-color: rgba(64,216,160,0.3);
+}
+[data-theme="aurora"] .logo-icon {
+  background: linear-gradient(135deg, rgba(64,216,160,0.2), rgba(80,120,232,0.12));
+  box-shadow: 0 0 14px rgba(64,216,160,0.2);
+}
+[data-theme="aurora"] body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, #40d8a0, #5080e8, #a050e8, #40d8a0);
+  background-size: 200% 100%;
+  animation: auroraBar 6s linear infinite;
+  z-index: 9999;
+  pointer-events: none;
+}
+@keyframes auroraBar {
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+[data-theme="aurora"] .streak-number { color: #50e8b0; }
+
+/* Cyber Neon: electric cyberpunk glow */
+[data-theme="cyber-neon"] .btn-primary {
+  background: linear-gradient(135deg, #c030a0, #f050d0, #e040c0);
+  box-shadow: 0 0 16px rgba(224,64,192,0.3), 0 0 30px rgba(224,64,192,0.1);
+  text-shadow: 0 0 6px rgba(255,100,220,0.4), 0 1px 2px rgba(0,0,0,0.4);
+}
+[data-theme="cyber-neon"] .deck-item:hover {
+  box-shadow: 0 0 20px rgba(224,64,192,0.08), 0 0 40px rgba(64,192,255,0.04);
+  border-color: rgba(224,64,192,0.3);
+}
+[data-theme="cyber-neon"] .logo-icon {
+  background: linear-gradient(135deg, rgba(224,64,192,0.2), rgba(64,192,255,0.12));
+  box-shadow: 0 0 14px rgba(224,64,192,0.25);
+}
+[data-theme="cyber-neon"] body::after {
+  content: '';
+  position: fixed;
+  bottom: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, #e040c0, #40c0ff, #e040c0);
+  background-size: 200% 100%;
+  animation: neonBar 3s linear infinite;
+  z-index: 9999;
+  pointer-events: none;
+}
+@keyframes neonBar {
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+[data-theme="cyber-neon"] .streak-number {
+  color: #ff60e0;
+  text-shadow: 0 0 10px rgba(255,96,224,0.3);
+}
+[data-theme="cyber-neon"] .accent-glow {
+  text-shadow: 0 0 8px rgba(224,64,192,0.4);
+}
+
+/* Dull Black: refined matte elegance */
+[data-theme="dull-black"] .btn-primary {
+  background: linear-gradient(135deg, #6a6a8a, #8080a0, #7a7a9a);
+}
+[data-theme="dull-black"] .deck-item:hover {
+  box-shadow: 0 2px 12px rgba(122,122,154,0.08);
+}
 
 /* ===== Responsive ===== */
 @media(max-width:380px) {
