@@ -1248,24 +1248,29 @@ function attachEventListeners() {
   if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},80);
 }
 
-// ===== Black Pearl Effect (periodic button flash) =====
-function initBlackPearlEffect() {
-  function flashButtons() {
-    const buttons = document.querySelectorAll('.btn, .btn-primary, .btn-sm, .btn-lg, .menu-item, .rating-btn, .simple-btn');
-    if (buttons.length === 0) return;
-    const idx = Math.floor(Math.random() * Math.min(buttons.length, 5));
-    for (let i = 0; i < Math.min(3, buttons.length); i++) {
-      const bi = (idx + i) % buttons.length;
-      const btn = buttons[bi];
-      btn.classList.add('pearl-flash');
-      setTimeout(() => btn.classList.remove('pearl-flash'), 600);
-    }
+// ===== Blade Flash Effect (sharp right-to-left sweep, select themes only) =====
+const FLASH_THEMES = ['gleaming-pearl', 'cyber-neon'];
+let flashInterval = null;
+
+function initBladeFlash() {
+  if (flashInterval) clearInterval(flashInterval);
+  function tick() {
+    if (!FLASH_THEMES.includes(State.theme)) return;
+    const btns = document.querySelectorAll('.btn:not(.btn-ghost):not(.btn-icon):not(.btn-icon-sm), .rating-btn, .simple-btn');
+    if (btns.length === 0) return;
+    // Pick 1 random button for a crisp single flash
+    const idx = Math.floor(Math.random() * btns.length);
+    const btn = btns[idx];
+    btn.classList.remove('blade-flash');
+    void btn.offsetWidth; // force reflow for re-trigger
+    btn.classList.add('blade-flash');
+    setTimeout(() => btn.classList.remove('blade-flash'), 400);
   }
-  setInterval(flashButtons, 4000);
-  setTimeout(flashButtons, 2000);
+  flashInterval = setInterval(tick, 4000);
+  setTimeout(tick, 2000);
 }
 
 // ===== Init =====
-async function init() { applyTheme(State.theme); await initAuth(); render(); initBlackPearlEffect(); }
+async function init() { applyTheme(State.theme); await initAuth(); render(); initBladeFlash(); }
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();
