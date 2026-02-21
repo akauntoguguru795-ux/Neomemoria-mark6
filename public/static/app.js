@@ -116,17 +116,38 @@ function navigate(view, data = {}) {
 // ===== Auth =====
 async function initAuth() {
   if (State.token) {
-    try { const { user } = await API.get('/auth/me'); State.user = user; }
-    catch { State.token = null; localStorage.removeItem('vf_token'); }
+    try {
+      const data = await API.get('/auth/me');
+      if (data && data.user) {
+        State.user = data.user;
+      } else {
+        State.token = null;
+        State.user = null;
+        localStorage.removeItem('vf_token');
+      }
+    } catch {
+      State.token = null;
+      State.user = null;
+      localStorage.removeItem('vf_token');
+    }
   }
 }
 
 async function login(username, password) {
-  const data = await API.post('/auth/login', { username, password });
-  State.token = data.token; State.user = data.user;
-  localStorage.setItem('vf_token', data.token);
-  showToast('ログイン成功!', 'success');
-  navigate('home');
+  try {
+    const data = await API.post('/auth/login', { username, password });
+    if (!data.token) throw new Error('トークンが取得できませんでした');
+    State.token = data.token;
+    State.user = data.user;
+    localStorage.setItem('vf_token', data.token);
+    showToast('ログイン成功!', 'success');
+    navigate('home');
+  } catch (e) {
+    State.token = null;
+    State.user = null;
+    localStorage.removeItem('vf_token');
+    throw e;
+  }
 }
 
 async function register(username, password, displayName) {
@@ -138,7 +159,13 @@ async function register(username, password, displayName) {
 }
 
 function logout() {
-  State.user = null; State.token = null; localStorage.removeItem('vf_token');
+  State.user = null;
+  State.token = null;
+  localStorage.removeItem('vf_token');
+  State.currentDeck = null;
+  State.currentCards = [];
+  State.currentProgress = {};
+  State.myDecks = [];
   showToast('ログアウトしました', 'info');
   navigate('home');
 }
@@ -1266,8 +1293,8 @@ function initBladeFlash() {
     btn.classList.add('blade-flash');
     setTimeout(() => btn.classList.remove('blade-flash'), 400);
   }
-  flashInterval = setInterval(tick, 4000);
-  setTimeout(tick, 2000);
+  flashInterval = setInterval(tick, 2000);
+  setTimeout(tick, 1200);
 }
 
 // ===== Init =====
