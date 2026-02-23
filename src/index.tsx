@@ -14,11 +14,15 @@ app.use('/api/*', async (c, next) => {
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice(7)
     try {
-      const decoded = atob(token)
-      const [userId, username] = decoded.split(':')
-      if (userId && username) {
-        c.set('userId', userId)
-        c.set('username', username)
+      const decoded = base64ToUtf8(token)
+      const colonIdx = decoded.indexOf(':')
+      if (colonIdx > 0) {
+        const userId = decoded.substring(0, colonIdx)
+        const username = decoded.substring(colonIdx + 1)
+        if (userId && username) {
+          c.set('userId', userId)
+          c.set('username', username)
+        }
       }
     } catch { /* not logged in */ }
   }
@@ -38,6 +42,22 @@ async function hashPassword(password: string): Promise<string> {
   const data = encoder.encode(password + 'vocabflash-salt-2024')
   const hash = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// UTF-8 safe base64 encode/decode (handles non-ASCII characters like Japanese)
+function utf8ToBase64(str: string): string {
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode(str)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function base64ToUtf8(b64: string): string {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new TextDecoder().decode(bytes)
 }
 
 function requireAuth(c: any): string {
@@ -61,7 +81,7 @@ app.post('/api/auth/register', async (c) => {
   await c.env.DB.prepare('INSERT INTO users (id, username, password_hash, display_name) VALUES (?, ?, ?, ?)')
     .bind(id, username, passwordHash, displayName || username).run()
   
-  const token = btoa(`${id}:${username}`)
+  const token = utf8ToBase64(`${id}:${username}`)
   return c.json({ token, user: { id, username, displayName: displayName || username } })
 })
 
@@ -72,9 +92,9 @@ app.post('/api/auth/login', async (c) => {
   const passwordHash = await hashPassword(password)
   const user: any = await c.env.DB.prepare('SELECT id, username, display_name FROM users WHERE username = ? AND password_hash = ?')
     .bind(username, passwordHash).first()
-  if (!user) return c.json({ error: 'Invalid credentials' }, 401)
+  if (!user) return c.json({ error: 'ユーザー名またはパスワードが正しくありません。' }, 401)
   
-  const token = btoa(`${user.id}:${user.username}`)
+  const token = utf8ToBase64(`${user.id}:${user.username}`)
   return c.json({ token, user: { id: user.id, username: user.username, displayName: user.display_name } })
 })
 

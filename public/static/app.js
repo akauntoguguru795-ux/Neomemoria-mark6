@@ -45,17 +45,18 @@ const API = {
     if (State.token) headers['Authorization'] = `Bearer ${State.token}`;
     const opts = { method, headers };
     if (body) opts.body = JSON.stringify(body);
-    try {
-      const res = await fetch(this.base + path, opts);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
-      return data;
-    } catch (e) {
-      if (e.message === 'Unauthorized') {
+    const res = await fetch(this.base + path, opts);
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) {
+      const msg = data.error || `Request failed (${res.status})`;
+      // Clear auth state on 401 Unauthorized responses
+      if (res.status === 401) {
         State.user = null; State.token = null; localStorage.removeItem('vf_token');
       }
-      throw e;
+      throw new Error(msg);
     }
+    return data;
   },
   get(p) { return this.request('GET', p); },
   post(p, b) { return this.request('POST', p, b); },
@@ -134,25 +135,24 @@ async function initAuth() {
 }
 
 async function login(username, password) {
-  try {
-    const data = await API.post('/auth/login', { username, password });
-    if (!data.token) throw new Error('トークンが取得できませんでした');
-    State.token = data.token;
-    State.user = data.user;
-    localStorage.setItem('vf_token', data.token);
-    showToast('ログイン成功!', 'success');
-    navigate('home');
-  } catch (e) {
-    State.token = null;
-    State.user = null;
-    localStorage.removeItem('vf_token');
-    throw e;
-  }
+  // Clear any stale auth state before attempting login
+  State.token = null;
+  State.user = null;
+  localStorage.removeItem('vf_token');
+  const data = await API.post('/auth/login', { username, password });
+  if (!data || !data.token) throw new Error('トークンが取得できませんでした');
+  State.token = data.token;
+  State.user = data.user;
+  localStorage.setItem('vf_token', data.token);
+  showToast('ログイン成功!', 'success');
+  navigate('home');
 }
 
 async function register(username, password, displayName) {
   const data = await API.post('/auth/register', { username, password, displayName });
-  State.token = data.token; State.user = data.user;
+  if (!data || !data.token) throw new Error('登録に失敗しました');
+  State.token = data.token;
+  State.user = data.user;
   localStorage.setItem('vf_token', data.token);
   showToast('アカウント作成完了!', 'success');
   navigate('home');
@@ -1298,6 +1298,14 @@ function initBladeFlash() {
 }
 
 // ===== Init =====
-async function init() { applyTheme(State.theme); await initAuth(); render(); initBladeFlash(); }
+let _initDone = false;
+async function init() {
+  if (_initDone) return;
+  _initDone = true;
+  applyTheme(State.theme);
+  await initAuth();
+  render();
+  initBladeFlash();
+}
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();
