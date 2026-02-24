@@ -539,109 +539,97 @@ body {
 }
 
 /* ================================================================
-   THEME-SPECIFIC FLASHCARD & CARD EFFECTS
+   THEME-SPECIFIC FLASHCARD EFFECTS
+   CRITICAL: NO ::after pseudo-elements on flashcard faces!
+   Pseudo-elements with animation/z-index break backface-visibility
+   in WebKit/Blink. Use only box-shadow and border-image for effects.
    ================================================================ */
 
-/* Gleaming Pearl: iridescent card border + sheen */
-[data-theme="gleaming-pearl"] .flashcard-face {
+/* Gleaming Pearl: iridescent pearl sheen via box-shadow */
+[data-theme="gleaming-pearl"] .flashcard-front,
+[data-theme="gleaming-pearl"] .flashcard-back {
   box-shadow:
-    0 0 40px rgba(120,104,224,0.06),
-    0 0 80px rgba(100,80,200,0.03),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+    0 0 40px rgba(120,104,224,0.08),
+    0 0 80px rgba(100,80,200,0.04),
+    inset 0 1px 0 rgba(200,180,255,0.08),
+    inset 0 -1px 0 rgba(120,100,255,0.05);
+  border-color: rgba(120,104,224,0.2);
 }
-[data-theme="gleaming-pearl"] .flashcard-front::after,
-[data-theme="gleaming-pearl"] .flashcard-back::after {
-  content:''; position:absolute; inset:-1px; border-radius:var(--radius-xl);
-  background: linear-gradient(135deg,
-    rgba(120,100,255,0.08) 0%, transparent 30%,
-    rgba(180,120,255,0.06) 50%, transparent 70%,
-    rgba(100,160,255,0.08) 100%);
-  pointer-events:none; z-index:1;
-  backface-visibility:hidden; -webkit-backface-visibility:hidden;
-  animation: pearlSheen 6s ease-in-out infinite;
-}
-@keyframes pearlSheen { 0%,100% { opacity:0.3; } 50% { opacity:0.8; } }
 
 /* Dark Forest: warm firelight on cards */
-[data-theme="dark-forest"] .flashcard-face {
+[data-theme="dark-forest"] .flashcard-front,
+[data-theme="dark-forest"] .flashcard-back {
   box-shadow:
     0 8px 30px rgba(0,0,0,0.3),
-    0 0 60px rgba(232,120,48,0.05),
-    inset 0 -1px 0 rgba(232,134,42,0.04);
+    0 0 60px rgba(232,120,48,0.06),
+    inset 0 1px 0 rgba(255,200,100,0.04),
+    inset 0 -1px 0 rgba(232,134,42,0.05);
+  border-color: rgba(232,134,42,0.15);
 }
 
 /* White Pearl: soft pearl glow on cards */
-[data-theme="white-pearl"] .flashcard-face {
-  box-shadow: 0 4px 30px rgba(0,0,0,0.05), 0 0 20px rgba(122,90,170,0.04);
+[data-theme="white-pearl"] .flashcard-front,
+[data-theme="white-pearl"] .flashcard-back {
+  box-shadow:
+    0 4px 30px rgba(0,0,0,0.05),
+    0 0 20px rgba(122,90,170,0.05),
+    inset 0 1px 0 rgba(200,180,240,0.1),
+    inset 0 -1px 0 rgba(140,180,220,0.06);
+  border-color: rgba(122,90,170,0.12);
 }
-[data-theme="white-pearl"] .flashcard-front::after,
-[data-theme="white-pearl"] .flashcard-back::after {
-  content:''; position:absolute; inset:-1px; border-radius:var(--radius-xl);
-  background: linear-gradient(135deg,
-    rgba(180,140,220,0.06), transparent 40%,
-    rgba(140,180,220,0.04), transparent 70%,
-    rgba(200,160,200,0.06));
-  pointer-events:none; z-index:1;
-  backface-visibility:hidden; -webkit-backface-visibility:hidden;
-  animation: whitePearlSheen 7s ease-in-out infinite;
-}
-@keyframes whitePearlSheen { 0%,100% { opacity:0.3; } 50% { opacity:0.7; } }
 
 /* Dreamy: soft pastel glow on cards */
-[data-theme="dreamy"] .flashcard-face {
-  box-shadow: 0 4px 30px rgba(200,100,150,0.08);
-}
-[data-theme="dreamy"] .flashcard-front::after,
-[data-theme="dreamy"] .flashcard-back::after {
-  content:''; position:absolute; inset:-1px; border-radius:var(--radius-xl);
-  background: linear-gradient(135deg, rgba(224,122,170,0.06), transparent 50%, rgba(200,160,240,0.05));
-  pointer-events:none; z-index:1;
-  backface-visibility:hidden; -webkit-backface-visibility:hidden;
-}
 [data-theme="dreamy"] .flashcard-front,
 [data-theme="dreamy"] .flashcard-back {
   background: linear-gradient(145deg, #fff8fb, #fef2f7, #fff5f9);
+  box-shadow:
+    0 4px 30px rgba(200,100,150,0.1),
+    inset 0 1px 0 rgba(240,180,220,0.15),
+    inset 0 -1px 0 rgba(200,160,240,0.08);
+  border-color: rgba(224,122,170,0.15);
 }
 
 /* Midnight Ocean: deep bioluminescence */
-[data-theme="midnight-ocean"] .flashcard-face {
-  box-shadow: 0 4px 40px rgba(68,136,238,0.07), inset 0 1px 0 rgba(255,255,255,0.02);
+[data-theme="midnight-ocean"] .flashcard-front,
+[data-theme="midnight-ocean"] .flashcard-back {
+  box-shadow:
+    0 4px 40px rgba(68,136,238,0.08),
+    inset 0 1px 0 rgba(100,180,255,0.05),
+    inset 0 -1px 0 rgba(68,136,238,0.04);
+  border-color: rgba(68,136,238,0.15);
 }
 
 /* Sakura: warm petal tones */
-[data-theme="sakura"] .flashcard-face {
-  box-shadow: 0 4px 30px rgba(232,112,90,0.06);
-}
 [data-theme="sakura"] .flashcard-front,
 [data-theme="sakura"] .flashcard-back {
   background: linear-gradient(145deg, #fffaf6, #fef4ee, #fff8f3);
+  box-shadow:
+    0 4px 30px rgba(232,112,90,0.08),
+    inset 0 1px 0 rgba(255,180,160,0.1),
+    inset 0 -1px 0 rgba(232,112,90,0.05);
+  border-color: rgba(232,112,90,0.12);
 }
 
 /* Aurora: northern lights glow on cards */
-[data-theme="aurora"] .flashcard-face {
-  box-shadow: 0 0 40px rgba(64,216,160,0.06), 0 0 80px rgba(80,120,232,0.03);
-}
-[data-theme="aurora"] .flashcard-front::after,
-[data-theme="aurora"] .flashcard-back::after {
-  content:''; position:absolute; inset:-1px; border-radius:var(--radius-xl);
-  background: linear-gradient(135deg, rgba(64,216,160,0.05), transparent 40%, rgba(80,120,232,0.04));
-  pointer-events:none; z-index:1;
-  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+[data-theme="aurora"] .flashcard-front,
+[data-theme="aurora"] .flashcard-back {
+  box-shadow:
+    0 0 40px rgba(64,216,160,0.08),
+    0 0 80px rgba(80,120,232,0.04),
+    inset 0 1px 0 rgba(64,216,160,0.06),
+    inset 0 -1px 0 rgba(80,120,232,0.04);
+  border-color: rgba(64,216,160,0.15);
 }
 
 /* Cyber Neon: neon glow on cards */
-[data-theme="cyber-neon"] .flashcard-face {
+[data-theme="cyber-neon"] .flashcard-front,
+[data-theme="cyber-neon"] .flashcard-back {
   box-shadow:
-    0 0 30px rgba(224,64,192,0.06),
-    0 0 60px rgba(64,192,255,0.03),
-    inset 0 1px 0 rgba(255,255,255,0.03);
-}
-[data-theme="cyber-neon"] .flashcard-front::after,
-[data-theme="cyber-neon"] .flashcard-back::after {
-  content:''; position:absolute; inset:-1px; border-radius:var(--radius-xl);
-  background: linear-gradient(135deg, rgba(224,64,192,0.05), transparent 40%, rgba(64,192,255,0.04));
-  pointer-events:none; z-index:1;
-  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    0 0 30px rgba(224,64,192,0.08),
+    0 0 60px rgba(64,192,255,0.04),
+    inset 0 1px 0 rgba(255,120,230,0.06),
+    inset 0 -1px 0 rgba(64,192,255,0.04);
+  border-color: rgba(224,64,192,0.18);
 }
 
 /* ===== Layout ===== */
@@ -897,22 +885,24 @@ body {
 .flashcard {
   width:100%; flex:1; min-height:220px; position:relative; cursor:pointer;
   transition:transform 0.5s cubic-bezier(0.4,0,0.2,1);
-  transform-style:preserve-3d; border-radius:var(--radius-xl);
+  transform-style:preserve-3d; -webkit-transform-style:preserve-3d;
+  border-radius:var(--radius-xl);
   -webkit-user-select:none; user-select:none;
-  will-change: transform;
 }
 .flashcard.flipped { transform:rotateY(180deg); }
 .flashcard-face {
-  position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  position:absolute; inset:0;
+  backface-visibility:hidden; -webkit-backface-visibility:hidden;
   border-radius:var(--radius-xl);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   padding:20px 16px;
-  border:1.5px solid var(--border); overflow:hidden;
+  border:1.5px solid var(--border);
+  /* CRITICAL: no overflow:hidden, no z-index on children, no ::after.
+     These all create stacking contexts that break backface-visibility
+     in WebKit/Blink browsers. */
 }
-/* Ensure text content renders above ::after decorative overlays */
-.flashcard-face > * { position:relative; z-index:2; }
 .flashcard-front { background:var(--card-front); }
-.flashcard-back { background:var(--card-back); transform:rotateY(180deg); }
+.flashcard-back  { background:var(--card-back); transform:rotateY(180deg); }
 
 .fc-number { font-size:0.72rem; color:var(--text-tertiary); margin-bottom:4px; font-weight:700; letter-spacing:0.1em; }
 .fc-word { font-size:2.2rem; font-weight:700; text-align:center; color:var(--text-primary); line-height:1.3; letter-spacing:-0.01em; }
