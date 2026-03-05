@@ -1,10 +1,12 @@
 /* ============================================================
-   Neomemoria - Complete Frontend Application v4.0
+   Neomemoria - Complete Frontend Application v5.0
    - 3 button layout options (settings)
    - Enlarged rating buttons
    - Simple mode same size pre/post flip
    - Password visibility toggle
-   - Performance optimized (DOM diffing, debounce)
+   - Performance optimized v5: minimal DOM updates, no full re-render
+     on flip/rate, string-based escaping, RAF-based flash, guarded
+     event listeners, partial menu/study updates
    - Study history
    - 9 premium themes
    ============================================================ */
@@ -35,6 +37,7 @@ const State = {
   stats: null,
   searchQuery: '',
   menuOpen: false,
+  _loadedView: null, // tracks which view has loaded async data
 };
 
 // ===== API Helper =====
@@ -50,7 +53,6 @@ const API = {
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) {
       const msg = data.error || `Request failed (${res.status})`;
-      // Clear auth state on 401 Unauthorized responses
       if (res.status === 401) {
         State.user = null; State.token = null; localStorage.removeItem('vf_token');
       }
@@ -63,6 +65,11 @@ const API = {
   put(p, b) { return this.request('PUT', p, b); },
   del(p) { return this.request('DELETE', p); },
 };
+
+// ===== Escape HTML (string-based, zero DOM creation) =====
+const _escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const _escRe = /[&<>"']/g;
+function esc(str) { return str ? str.replace(_escRe, m => _escMap[m]) : ''; }
 
 // ===== Theme =====
 function applyTheme(t) {
@@ -80,14 +87,20 @@ function setButtonLayout(layout) {
 // ===== Study History (localStorage) =====
 const StudyHistory = {
   KEY: 'vf_study_history',
-  get() { try { return JSON.parse(localStorage.getItem(this.KEY)) || []; } catch { return []; } },
+  _cache: null,
+  get() {
+    if (this._cache) return this._cache;
+    try { this._cache = JSON.parse(localStorage.getItem(this.KEY)) || []; } catch { this._cache = []; }
+    return this._cache;
+  },
   add(entry) {
     const hist = this.get();
     hist.unshift({ ...entry, timestamp: Date.now() });
     if (hist.length > 50) hist.length = 50;
+    this._cache = hist;
     localStorage.setItem(this.KEY, JSON.stringify(hist));
   },
-  clear() { localStorage.removeItem(this.KEY); }
+  clear() { this._cache = null; localStorage.removeItem(this.KEY); }
 };
 
 // ===== Toast =====
@@ -109,6 +122,7 @@ function showToast(message, type = 'info') {
 // ===== Navigation =====
 function navigate(view, data = {}) {
   State.currentView = view;
+  State._loadedView = null;
   Object.assign(State, data);
   render();
   window.scrollTo(0, 0);
@@ -135,7 +149,6 @@ async function initAuth() {
 }
 
 async function login(username, password) {
-  // Clear any stale auth state before attempting login
   State.token = null;
   State.user = null;
   localStorage.removeItem('vf_token');
@@ -184,17 +197,17 @@ const LocalProgress = {
 
 // ===== SRS =====
 function getNextReview(status) {
-  const now = new Date();
+  const now = Date.now();
   switch (status) {
     case 'mastered': return null;
-    case 'good': return new Date(now.getTime() + 2 * 86400000).toISOString();
-    case 'unsure': return new Date(now.getTime() + 1 * 86400000).toISOString();
+    case 'good': return new Date(now + 172800000).toISOString();
+    case 'unsure': return new Date(now + 86400000).toISOString();
     case 'forgot': return 'forgot';
-    default: return now.toISOString();
+    default: return new Date(now).toISOString();
   }
 }
 
-function buildStudyQueue(cards, progress, mode = 'srs') {
+function buildStudyQueue(cards, progress, mode) {
   let queue = cards.filter(c => {
     const p = progress[c.id];
     if (!p) return true;
@@ -204,9 +217,14 @@ function buildStudyQueue(cards, progress, mode = 'srs') {
   if (mode === 'sequential') return queue.sort((a, b) => a.sort_order - b.sort_order);
   if (mode === 'random') return shuffleArray([...queue]);
   const now = new Date().toISOString();
-  const unseen = queue.filter(c => !progress[c.id]);
-  const review = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review <= now);
-  const future = queue.filter(c => progress[c.id] && progress[c.id].next_review && progress[c.id].next_review > now);
+  const unseen = [], review = [], future = [];
+  for (let i = 0; i < queue.length; i++) {
+    const c = queue[i], p = progress[c.id];
+    if (!p) { unseen.push(c); continue; }
+    if (p.next_review && p.next_review <= now) review.push(c);
+    else if (p.next_review && p.next_review > now) future.push(c);
+    else unseen.push(c);
+  }
   if (unseen.length === queue.length) return shuffleArray(unseen);
   review.sort((a, b) => (progress[a.id]?.next_review || '').localeCompare(progress[b.id]?.next_review || ''));
   return [...review, ...shuffleArray(unseen), ...future];
@@ -222,7 +240,7 @@ function shuffleArray(arr) {
 
 // ===== CSV =====
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const lines = text.split(/\r?\n/);
   const cards = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -268,12 +286,13 @@ function getAllProgress() {
 
 async function saveProgress(cardId, deckId, status) {
   const nextReview = getNextReview(status);
+  const prev = getProgress(cardId);
   const pd = {
     status,
     next_review: nextReview === 'forgot' ? null : nextReview,
     last_reviewed: new Date().toISOString(),
-    review_count: (getProgress(cardId)?.review_count || 0) + 1,
-    correct_count: (getProgress(cardId)?.correct_count || 0) + (status === 'mastered' || status === 'good' ? 1 : 0),
+    review_count: (prev?.review_count || 0) + 1,
+    correct_count: (prev?.correct_count || 0) + (status === 'mastered' || status === 'good' ? 1 : 0),
   };
   if (State.user) {
     State.currentProgress[cardId] = pd;
@@ -291,7 +310,7 @@ function getStreakInfo(streak) {
   return { emoji: '📚', label: 'スタート', cls: '' };
 }
 
-// ===== Render Engine (optimized: direct innerHTML update) =====
+// ===== Render Engine =====
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -312,7 +331,7 @@ function render() {
     default: html = renderHome();
   }
   app.innerHTML = renderHeader() + html;
-  attachEventListeners();
+  afterRender();
 }
 
 function renderHeader() {
@@ -419,7 +438,7 @@ function renderBrowse() {
       <div class="search-bar">
         <div class="search-wrapper">
           <i class="fas fa-search"></i>
-          <input type="text" class="search-input" placeholder="単語帳名、作成者、単語を検索..." value="${State.searchQuery}" onkeyup="handleSearch(event)" id="search-input">
+          <input type="text" class="search-input" placeholder="単語帳名、作成者、単語を検索..." value="${esc(State.searchQuery)}" onkeyup="handleSearch(event)" id="search-input">
         </div>
       </div>
       <div id="deck-list" class="deck-list"><div class="loading"><div class="spinner"></div></div></div>
@@ -490,10 +509,10 @@ async function loadMyDecks() {
     }
     State.myDecks = data.decks;
     c.innerHTML = data.decks.map(d => renderDeckItem(d, true)).join('');
-  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
+  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`; }
 }
 
-function renderDeckItem(deck, showActions = false) {
+function renderDeckItem(deck, showActions) {
   const isOwner = State.user && deck.user_id === State.user.id;
   return `
     <div class="deck-item">
@@ -734,7 +753,6 @@ function renderOniCard(card) {
 function renderRatingArea(card, layout) {
   const layoutClass = `layout-${layout}`;
 
-  // Simple mode: SAME size/position pre and post flip
   if (State.studyMode === 'simple') {
     const preflipClass = State.isFlipped ? 'simple-postflip' : 'simple-preflip';
     return `
@@ -748,7 +766,6 @@ function renderRatingArea(card, layout) {
     `;
   }
 
-  // Normal mode: show 2x2 grid only after flip
   if (!State.isFlipped) return '';
 
   return `
@@ -779,13 +796,61 @@ function renderRatingArea(card, layout) {
   `;
 }
 
-function flipAndRate(status) {
-  State.isFlipped = true;
-  render();
-  setTimeout(() => rateCard(status), 350);
+// ===== Optimized flip: direct DOM manipulation, no full render =====
+function flipCard() {
+  State.isFlipped = !State.isFlipped;
+  const fc = document.querySelector('.flashcard');
+  if (!fc) { render(); return; }
+  fc.classList.toggle('flipped', State.isFlipped);
+  // Update rating area for normal mode (show/hide buttons after flip)
+  if (State.studyMode === 'normal') {
+    const ctrl = document.querySelector('.study-controls');
+    if (ctrl) {
+      const card = State.studyQueue[State.studyIndex];
+      if (card) {
+        ctrl.innerHTML = renderRatingArea(card, State.buttonLayout) + `
+          <div class="study-bottom-controls">
+            <button class="btn btn-sm ${State.history.length === 0 ? 'btn-ghost' : ''}" onclick="undoLastRating()" ${State.history.length === 0 ? 'disabled style="opacity:0.35;"' : ''}>
+              <i class="fas fa-undo"></i> 戻る
+            </button>
+            <button class="btn btn-sm" onclick="toggleOrder()">
+              <i class="fas fa-${State.orderMode === 'random' ? 'random' : State.orderMode === 'sequential' ? 'sort-numeric-down' : 'brain'}"></i>
+              ${{ srs: 'SRS順', random: 'ランダム', sequential: '番号順' }[State.orderMode]}
+            </button>
+          </div>`;
+      }
+    }
+  } else if (State.studyMode === 'simple') {
+    // Update simple mode hint text and opacity
+    const hintEl = document.querySelector('.simple-hint-text');
+    const btnsWrap = document.querySelector('.simple-btns');
+    if (hintEl) hintEl.textContent = State.isFlipped ? '回答を選択' : 'めくらずに回答 or タップでめくる';
+    if (btnsWrap) {
+      btnsWrap.classList.toggle('simple-preflip', !State.isFlipped);
+      btnsWrap.classList.toggle('simple-postflip', State.isFlipped);
+      // Update onclick handlers
+      const correctBtn = btnsWrap.querySelector('.simple-correct');
+      const wrongBtn = btnsWrap.querySelector('.simple-wrong');
+      if (correctBtn) correctBtn.setAttribute('onclick', State.isFlipped ? "rateCard('good')" : "flipAndRate('good')");
+      if (wrongBtn) wrongBtn.setAttribute('onclick', State.isFlipped ? "rateCard('forgot')" : "flipAndRate('forgot')");
+    }
+  }
 }
 
-function flipCard() { State.isFlipped = !State.isFlipped; render(); }
+function flipAndRate(status) {
+  State.isFlipped = true;
+  const fc = document.querySelector('.flashcard');
+  if (fc) fc.classList.add('flipped');
+  // Update simple buttons immediately
+  const hintEl = document.querySelector('.simple-hint-text');
+  const btnsWrap = document.querySelector('.simple-btns');
+  if (hintEl) hintEl.textContent = '回答を選択';
+  if (btnsWrap) {
+    btnsWrap.classList.remove('simple-preflip');
+    btnsWrap.classList.add('simple-postflip');
+  }
+  setTimeout(() => rateCard(status), 350);
+}
 
 async function rateCard(status) {
   const card = State.studyQueue[State.studyIndex];
@@ -1065,7 +1130,7 @@ async function loadStats() {
         }).join('')}
       </div>
     `;
-  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${e.message}</div></div>`; }
+  } catch (e) { c.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`; }
 }
 
 // ===== Settings =====
@@ -1258,43 +1323,51 @@ async function resetCard(cardId) {
   try{if(State.user){await API.post('/progress/reset',{cardId});delete State.currentProgress[cardId];}else{localStorage.removeItem(`vf_prog_${cardId}`);}showToast('未習得に戻しました','success');render();}catch(e){showToast(e.message,'error');}
 }
 
-// ===== Utilities (shortened names for perf) =====
-function esc(str) { if(!str)return''; const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
+// ===== Utilities =====
 function fmtDate(ds) { if(!ds)return''; const d=new Date(ds); return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`; }
 function fmtTime(s) { if(s<60)return`${s}秒`; if(s<3600)return`${Math.floor(s/60)}分`; return`${Math.floor(s/3600)}時間${Math.floor((s%3600)/60)}分`; }
-
-// Keep old names as aliases for backward compat
 const escapeHtml = esc;
 const formatDate = fmtDate;
 const formatTime = fmtTime;
 
-function attachEventListeners() {
-  if (State.currentView==='browse') setTimeout(()=>loadPublicDecks(),30);
-  if (State.currentView==='mydecks') setTimeout(()=>loadMyDecks(),30);
-  if (State.currentView==='stats') setTimeout(()=>loadStats(),30);
-  if (State.currentView==='study'&&State.studyMode==='oni') setTimeout(()=>{const i=document.getElementById('oni-input');if(i)i.focus();},80);
+// ===== After-render hook (guarded async data loading) =====
+function afterRender() {
+  const view = State.currentView;
+  // Only load async data once per navigation, not on every render()
+  if (view === 'browse' && State._loadedView !== 'browse') {
+    State._loadedView = 'browse';
+    loadPublicDecks();
+  }
+  if (view === 'mydecks' && State._loadedView !== 'mydecks') {
+    State._loadedView = 'mydecks';
+    loadMyDecks();
+  }
+  if (view === 'stats' && State._loadedView !== 'stats') {
+    State._loadedView = 'stats';
+    loadStats();
+  }
+  if (view === 'study' && State.studyMode === 'oni') {
+    setTimeout(() => { const i = document.getElementById('oni-input'); if (i) i.focus(); }, 80);
+  }
 }
 
-// ===== Blade Flash Effect (sharp right-to-left sweep, select themes only) =====
+// ===== Blade Flash Effect (RAF-based, lightweight) =====
 const FLASH_THEMES = ['gleaming-pearl', 'cyber-neon'];
-let flashInterval = null;
+let flashTimer = 0;
 
-function initBladeFlash() {
-  if (flashInterval) clearInterval(flashInterval);
-  function tick() {
-    if (!FLASH_THEMES.includes(State.theme)) return;
-    const btns = document.querySelectorAll('.btn:not(.btn-ghost):not(.btn-icon):not(.btn-icon-sm), .rating-btn, .simple-btn');
-    if (btns.length === 0) return;
-    // Pick 1 random button for a crisp single flash
-    const idx = Math.floor(Math.random() * btns.length);
-    const btn = btns[idx];
-    btn.classList.remove('blade-flash');
-    void btn.offsetWidth; // force reflow for re-trigger
-    btn.classList.add('blade-flash');
-    setTimeout(() => btn.classList.remove('blade-flash'), 400);
-  }
-  flashInterval = setInterval(tick, 2000);
-  setTimeout(tick, 1200);
+function scheduleFlash() {
+  flashTimer = setTimeout(() => {
+    if (!FLASH_THEMES.includes(State.theme)) { scheduleFlash(); return; }
+    requestAnimationFrame(() => {
+      const btns = document.querySelectorAll('.btn:not(.btn-ghost):not(.btn-icon):not(.btn-icon-sm), .rating-btn, .simple-btn');
+      if (btns.length > 0) {
+        const btn = btns[Math.floor(Math.random() * btns.length)];
+        btn.classList.add('blade-flash');
+        setTimeout(() => btn.classList.remove('blade-flash'), 400);
+      }
+      scheduleFlash();
+    });
+  }, 2000);
 }
 
 // ===== Init =====
@@ -1305,7 +1378,7 @@ async function init() {
   applyTheme(State.theme);
   await initAuth();
   render();
-  initBladeFlash();
+  scheduleFlash();
 }
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();
