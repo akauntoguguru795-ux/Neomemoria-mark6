@@ -923,12 +923,26 @@ body {
 .fc-number { font-size:0.72rem; color:var(--text-tertiary); margin-bottom:4px; font-weight:700; letter-spacing:0.1em; }
 .fc-word { font-size:2.2rem; font-weight:700; text-align:center; color:var(--text-primary); line-height:1.3; letter-spacing:-0.01em; }
 .fc-meaning-lg {
-  font-size:2.4rem; font-weight:800; text-align:center; color:var(--text-primary);
-  margin-bottom:10px; line-height:1.25; letter-spacing:-0.01em;
+  font-size:2rem; font-weight:800; text-align:center; color:var(--text-primary);
+  margin-bottom:6px; line-height:1.25; letter-spacing:-0.01em;
 }
-.fc-example { font-size:0.92rem; color:var(--text-secondary); text-align:center; line-height:1.6; max-width:94%; }
-.fc-example-jp { font-size:0.84rem; color:var(--text-tertiary); text-align:center; margin-top:5px; }
-.fc-emoji { font-size:2.4rem; margin-top:8px; }
+/* Details area: syntax, examples, emoji – smaller than meaning for readability */
+.fc-details {
+  width:100%; max-width:94%; margin-top:4px;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+}
+.fc-syntax {
+  font-size:0.82rem; color:var(--text-secondary); text-align:center; line-height:1.55;
+  word-break:break-word;
+}
+.fc-detail-label {
+  display:inline-block; font-size:0.62rem; font-weight:700; color:var(--accent);
+  background:var(--accent-glow); padding:1px 5px; border-radius:3px;
+  margin-right:4px; vertical-align:middle;
+}
+.fc-example { font-size:0.82rem; color:var(--text-secondary); text-align:center; line-height:1.55; max-width:94%; word-break:break-word; }
+.fc-example-jp { font-size:0.78rem; color:var(--text-tertiary); text-align:center; margin-top:2px; word-break:break-word; }
+.fc-emoji { font-size:2rem; margin-top:5px; }
 .fc-tap-hint { position:absolute; bottom:10px; font-size:0.65rem; color:var(--text-tertiary); letter-spacing:0.06em; opacity:0.6; }
 
 /* ===== Study View Layout ===== */
@@ -1482,7 +1496,11 @@ body {
 /* ===== Responsive ===== */
 @media(max-width:380px) {
   .fc-word { font-size:1.7rem; }
-  .fc-meaning-lg { font-size:1.8rem; }
+  .fc-meaning-lg { font-size:1.5rem; }
+  .fc-syntax { font-size:0.72rem; }
+  .fc-example { font-size:0.72rem; }
+  .fc-example-jp { font-size:0.68rem; }
+  .fc-emoji { font-size:1.6rem; }
   .rating-label { font-size:0.72rem; }
   .rating-icon { font-size:1.4rem; }
   .simple-btn { font-size:2.2rem; }
@@ -1495,8 +1513,10 @@ body {
 @media(min-width:768px) {
   #app { padding:0 16px; }
   .flashcard { min-height:300px; }
-  .fc-meaning-lg { font-size:2.6rem; }
+  .fc-meaning-lg { font-size:2.2rem; }
   .fc-word { font-size:2.4rem; }
+  .fc-syntax { font-size:0.88rem; }
+  .fc-example { font-size:0.88rem; }
   .stats-grid { grid-template-columns:repeat(4,1fr); }
   .layout-right .rating-grid-2x2,
   .layout-left .rating-grid-2x2 { width:min(300px, 45%); gap:10px; }

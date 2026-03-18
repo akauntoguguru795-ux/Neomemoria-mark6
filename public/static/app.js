@@ -239,6 +239,11 @@ function shuffleArray(arr) {
 }
 
 // ===== CSV =====
+// Supports multiple import formats:
+//  A) word, meaning [, example_sentence, example_translation, emoji]          (5-col or fewer)
+//  B) No, word, meaning, syntax, example1, example2, emoji                   (7-col new pattern)
+//  C) No, word, meaning, example_sentence, example_translation, emoji        (6-col legacy)
+// Header row (No/Number/番号 in first column) is auto-skipped.
 function parseCSV(text) {
   const lines = text.split(/\r?\n/);
   const cards = [];
@@ -247,16 +252,50 @@ function parseCSV(text) {
     if (!line) continue;
     const fields = parseCSVLine(line);
     if (fields.length < 2) continue;
-    if (i === 0 && (fields[0].toLowerCase() === 'no' || fields[0].toLowerCase() === 'number' || fields[0].toLowerCase() === '番号')) continue;
+    // Skip header row
+    if (i === 0) {
+      const h = fields[0].trim().toLowerCase();
+      if (h === 'no' || h === 'number' || h === '番号' || h === 'no.') continue;
+    }
+    // Detect leading number column
     let s = 0;
     if (fields.length >= 3 && /^\d+$/.test(fields[0].trim())) s = 1;
-    const card = {
-      word: (fields[s] || '').trim(),
-      meaning: (fields[s+1] || '').trim(),
-      example_sentence: (fields[s+2] || '').trim(),
-      example_translation: (fields[s+3] || '').trim(),
-      emoji: (fields[s+4] || '').trim(),
-    };
+    const remaining = fields.length - s;
+    let card;
+    if (remaining >= 6) {
+      // 7-col pattern: No, word, meaning, syntax, example1, example2, emoji
+      // syntax = "follow suit（先例にならう）、as follows（次の通り）"
+      // example1 = "Follow the instructions...(指示に注意深く...)"  
+      // example2 = "I can't follow...(私はあなたの...)"  emoji = 📋
+      card = {
+        word: (fields[s] || '').trim(),
+        meaning: (fields[s+1] || '').trim(),
+        syntax: (fields[s+2] || '').trim(),
+        example_sentence: (fields[s+3] || '').trim(),
+        example_translation: (fields[s+4] || '').trim(),
+        emoji: (fields[s+5] || '').trim(),
+      };
+    } else if (remaining >= 5) {
+      // 6-col legacy: No, word, meaning, example_sentence, example_translation, emoji
+      card = {
+        word: (fields[s] || '').trim(),
+        meaning: (fields[s+1] || '').trim(),
+        syntax: '',
+        example_sentence: (fields[s+2] || '').trim(),
+        example_translation: (fields[s+3] || '').trim(),
+        emoji: (fields[s+4] || '').trim(),
+      };
+    } else {
+      // Minimal: word, meaning [, optional fields]
+      card = {
+        word: (fields[s] || '').trim(),
+        meaning: (fields[s+1] || '').trim(),
+        syntax: '',
+        example_sentence: (fields[s+2] || '').trim(),
+        example_translation: (fields[s+3] || '').trim(),
+        emoji: '',
+      };
+    }
     if (card.word && card.meaning) cards.push(card);
   }
   return cards;
@@ -714,12 +753,19 @@ function renderFlashcard(card) {
     ? `<div class="fc-word">${esc(card.word)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
     : `<div class="fc-number">#${card.sort_order}</div><div class="fc-word">${esc(card.word)}</div>`;
 
-  const back = State.studyMode === 'simple'
-    ? `<div class="fc-meaning-lg">${esc(card.meaning)}</div>${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`
-    : `<div class="fc-meaning-lg">${esc(card.meaning)}</div>
-       ${card.example_sentence ? `<div class="fc-example">${esc(card.example_sentence)}</div>` : ''}
-       ${card.example_translation ? `<div class="fc-example-jp">${esc(card.example_translation)}</div>` : ''}
-       ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}`;
+  // Build back content with syntax support
+  let backContent = `<div class="fc-meaning-lg">${esc(card.meaning)}</div>`;
+  if (State.studyMode === 'simple') {
+    backContent += card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : '';
+  } else {
+    const details = [];
+    if (card.syntax) details.push(`<div class="fc-syntax"><span class="fc-detail-label">構文</span>${esc(card.syntax)}</div>`);
+    if (card.example_sentence) details.push(`<div class="fc-example">${esc(card.example_sentence)}</div>`);
+    if (card.example_translation) details.push(`<div class="fc-example-jp">${esc(card.example_translation)}</div>`);
+    if (details.length > 0) backContent += `<div class="fc-details">${details.join('')}</div>`;
+    if (card.emoji) backContent += `<div class="fc-emoji">${card.emoji}</div>`;
+  }
+  const back = backContent;
 
   return `
     <div class="flashcard-area">
@@ -732,12 +778,15 @@ function renderFlashcard(card) {
 }
 
 function renderOniCard(card) {
+  let oniDetails = '';
+  if (card.syntax) oniDetails += `<div class="fc-syntax"><span class="fc-detail-label">構文</span>${esc(card.syntax)}</div>`;
   return `
     <div class="flashcard-area">
       <div class="flashcard" style="transform:none;">
         <div class="flashcard-face flashcard-front" style="position:relative;backface-visibility:visible;">
           <div class="fc-number">#${card.sort_order}</div>
           <div class="fc-meaning-lg">${esc(card.meaning)}</div>
+          ${oniDetails ? `<div class="fc-details">${oniDetails}</div>` : ''}
           ${card.emoji ? `<div class="fc-emoji">${card.emoji}</div>` : ''}
         </div>
       </div>
@@ -1016,12 +1065,19 @@ function renderImport() {
         <i class="fas fa-cloud-upload-alt"></i>
         <div class="file-drop-text">CSV / TXT ファイルをタップして選択</div>
         <div class="file-drop-sub">対応形式: CSV (.csv) / テキスト (.txt) / TSV (.tsv)</div>
-        <div class="file-drop-sub" style="margin-top:2px;">形式: No,単語,意味,例文,和訳,絵文字（例文以降は任意）</div>
+        <div class="file-drop-sub" style="margin-top:2px;">形式: No,単語,意味,構文,例文,例文2,絵文字（構文以降は任意）</div>
         <div class="file-drop-sub" style="margin-top:1px;"><i class="fas fa-info-circle" style="margin-right:3px;"></i>テキストファイル (.txt) もカンマ区切り・タブ区切りでインポートできます</div>
       </div>
       <input type="file" class="file-input-hidden" id="file-input" accept=".csv,.txt,.tsv" multiple onchange="handleFileImport(event)">
-      <div style="margin-top:10px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="4" placeholder="1,apple,りんご,I eat an apple.,私はりんごを食べる。,🍎"></textarea></div>
+      <div style="margin-top:10px;"><label class="input-label">または直接テキスト入力</label><textarea class="textarea" id="import-text" rows="4" placeholder="1,follow,～の後に続く,follow suit（先例にならう）,Follow the instructions carefully.(指示に注意深く従いなさい。),I can't follow your argument.(私はあなたの主張が理解できない。),📋"></textarea></div>
       <div id="import-preview" style="margin-top:10px;"></div>
+      <div class="card" style="padding:10px;margin-top:8px;font-size:0.75rem;color:var(--text-secondary);">
+        <div style="font-weight:600;margin-bottom:4px;"><i class="fas fa-info-circle"></i> インポート形式ガイド</div>
+        <div>• <strong>基本 (2列)</strong>: 単語, 意味</div>
+        <div>• <strong>従来 (5列)</strong>: No, 単語, 意味, 例文, 和訳, 絵文字</div>
+        <div>• <strong>拡張 (7列)</strong>: No, 単語, 意味, 構文(構文の意味), 例文(和訳), 例文2(和訳), 絵文字</div>
+        <div style="margin-top:3px;color:var(--text-tertiary);">※ 構文・例文・絵文字は空でもインポート可能です</div>
+      </div>
       <button class="btn btn-primary btn-lg" onclick="executeImport()" style="width:100%;margin-top:10px;"><i class="fas fa-file-import"></i> インポート</button>
     </div>
   `;
@@ -1048,11 +1104,12 @@ function showImportPreview() {
   const p = document.getElementById('import-preview');
   if (!p) return;
   if (importedCards.length === 0) { p.innerHTML = '<div class="card" style="text-align:center;color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> パースできる単語が見つかりません</div>'; return; }
+  const hasSyntax = importedCards.some(c => c.syntax);
   p.innerHTML = `
     <div class="card" style="padding:12px;">
-      <div style="font-weight:700;margin-bottom:4px;">${importedCards.length}語を検出</div>
-      <div style="max-height:160px;overflow-y:auto;">
-        ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${esc(c.word)}</div><div class="card-list-meaning">${esc(c.meaning)}</div></div>`).join('')}
+      <div style="font-weight:700;margin-bottom:4px;">${importedCards.length}語を検出 ${hasSyntax ? '<span style="font-size:0.72rem;color:var(--info);font-weight:400;">（構文データあり）</span>' : ''}</div>
+      <div style="max-height:200px;overflow-y:auto;">
+        ${importedCards.slice(0, 8).map((c, i) => `<div class="card-list-item"><div class="card-list-number">${i+1}</div><div class="card-list-word">${esc(c.word)}</div><div class="card-list-meaning">${esc(c.meaning)}</div>${c.syntax ? '<div style="font-size:0.65rem;color:var(--text-tertiary);margin-left:4px;">📐</div>' : ''}</div>`).join('')}
         ${importedCards.length > 8 ? `<div style="text-align:center;padding:5px;color:var(--text-tertiary);font-size:0.78rem;">…他 ${importedCards.length - 8}語</div>` : ''}
       </div>
     </div>
@@ -1296,24 +1353,24 @@ async function confirmDeleteDeck(deckId, deckName) {
 
 function showAddCardModal(deckId) {
   const m = document.createElement('div'); m.className='modal-overlay'; m.id='add-card-modal';
-  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を追加</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('add-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語 *</label><input type="text" class="input" id="new-word" placeholder="apple"></div><div class="input-group"><label class="input-label">意味 *</label><input type="text" class="input" id="new-meaning" placeholder="りんご"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="new-example" placeholder="I eat an apple."></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="new-translation" placeholder="私はりんごを食べる。"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="new-emoji" placeholder="🍎"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('add-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="addCardToCurrentDeck('${deckId}')">追加</button></div></div>`;
+  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を追加</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('add-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語 *</label><input type="text" class="input" id="new-word" placeholder="apple"></div><div class="input-group"><label class="input-label">意味 *</label><input type="text" class="input" id="new-meaning" placeholder="りんご"></div><div class="input-group"><label class="input-label">構文</label><input type="text" class="input" id="new-syntax" placeholder="apple of one's eye（目に入れても痛くない存在）"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="new-example" placeholder="I eat an apple.(私はりんごを食べる。)"></div><div class="input-group"><label class="input-label">例文2</label><input type="text" class="input" id="new-translation" placeholder="She is the apple of my eye.(彼女は私の大切な人だ。)"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="new-emoji" placeholder="🍎"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('add-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="addCardToCurrentDeck('${deckId}')">追加</button></div></div>`;
   document.body.appendChild(m);
 }
 async function addCardToCurrentDeck(deckId) {
   const w=document.getElementById('new-word')?.value?.trim(),m=document.getElementById('new-meaning')?.value?.trim();
   if(!w||!m){showToast('単語と意味は必須','error');return;}
-  try{await API.post(`/decks/${deckId}/cards`,{word:w,meaning:m,example_sentence:document.getElementById('new-example')?.value?.trim()||'',example_translation:document.getElementById('new-translation')?.value?.trim()||'',emoji:document.getElementById('new-emoji')?.value?.trim()||''});document.getElementById('add-card-modal')?.remove();showToast('追加しました','success');openDeck(deckId);}catch(e){showToast(e.message,'error');}
+  try{await API.post(`/decks/${deckId}/cards`,{word:w,meaning:m,syntax:document.getElementById('new-syntax')?.value?.trim()||'',example_sentence:document.getElementById('new-example')?.value?.trim()||'',example_translation:document.getElementById('new-translation')?.value?.trim()||'',emoji:document.getElementById('new-emoji')?.value?.trim()||''});document.getElementById('add-card-modal')?.remove();showToast('追加しました','success');openDeck(deckId);}catch(e){showToast(e.message,'error');}
 }
 
 async function editCard(cardId) {
   const card = State.currentCards.find(c=>c.id===cardId);
   if(!card)return;
   const m=document.createElement('div');m.className='modal-overlay';m.id='edit-card-modal';
-  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を編集</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語</label><input type="text" class="input" id="edit-word" value="${esc(card.word)}"></div><div class="input-group"><label class="input-label">意味</label><input type="text" class="input" id="edit-meaning" value="${esc(card.meaning)}"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="edit-example" value="${esc(card.example_sentence||'')}"></div><div class="input-group"><label class="input-label">例文の和訳</label><input type="text" class="input" id="edit-translation" value="${esc(card.example_translation||'')}"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="edit-emoji" value="${esc(card.emoji||'')}"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button></div></div>`;
+  m.innerHTML=`<div class="modal-content"><div class="modal-header"><div class="modal-title">単語を編集</div><button class="btn-icon-sm btn-ghost" onclick="document.getElementById('edit-card-modal').remove()"><i class="fas fa-times"></i></button></div><div class="modal-body"><div class="input-group"><label class="input-label">単語</label><input type="text" class="input" id="edit-word" value="${esc(card.word)}"></div><div class="input-group"><label class="input-label">意味</label><input type="text" class="input" id="edit-meaning" value="${esc(card.meaning)}"></div><div class="input-group"><label class="input-label">構文</label><input type="text" class="input" id="edit-syntax" value="${esc(card.syntax||'')}"></div><div class="input-group"><label class="input-label">例文</label><input type="text" class="input" id="edit-example" value="${esc(card.example_sentence||'')}"></div><div class="input-group"><label class="input-label">例文2</label><input type="text" class="input" id="edit-translation" value="${esc(card.example_translation||'')}"></div><div class="input-group"><label class="input-label">絵文字</label><input type="text" class="input" id="edit-emoji" value="${esc(card.emoji||'')}"></div></div><div class="modal-footer"><button class="btn" onclick="document.getElementById('edit-card-modal').remove()">キャンセル</button><button class="btn btn-primary" onclick="saveEditCard('${cardId}')">保存</button></div></div>`;
   document.body.appendChild(m);
 }
 async function saveEditCard(cardId) {
-  try{await API.put(`/cards/${cardId}`,{word:document.getElementById('edit-word')?.value?.trim(),meaning:document.getElementById('edit-meaning')?.value?.trim(),example_sentence:document.getElementById('edit-example')?.value?.trim(),example_translation:document.getElementById('edit-translation')?.value?.trim(),emoji:document.getElementById('edit-emoji')?.value?.trim()});document.getElementById('edit-card-modal')?.remove();showToast('保存しました','success');openDeck(State.currentDeck.id);}catch(e){showToast(e.message,'error');}
+  try{await API.put(`/cards/${cardId}`,{word:document.getElementById('edit-word')?.value?.trim(),meaning:document.getElementById('edit-meaning')?.value?.trim(),syntax:document.getElementById('edit-syntax')?.value?.trim(),example_sentence:document.getElementById('edit-example')?.value?.trim(),example_translation:document.getElementById('edit-translation')?.value?.trim(),emoji:document.getElementById('edit-emoji')?.value?.trim()});document.getElementById('edit-card-modal')?.remove();showToast('保存しました','success');openDeck(State.currentDeck.id);}catch(e){showToast(e.message,'error');}
 }
 async function deleteCard(cardId,word) {
   if(!confirm(`「${word}」を削除しますか？`))return;

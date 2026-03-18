@@ -122,10 +122,10 @@ app.post('/api/decks', async (c) => {
   await c.env.DB.prepare('INSERT INTO decks (id, name, description, user_id, author_name, is_public, card_count) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(deckId, name, description || '', userId, authorName, isPublic !== false ? 1 : 0, cards.length).run()
   
-  // Batch insert cards
+  // Batch insert cards (supports syntax field)
   const stmts = cards.map((card: any, i: number) => {
-    return c.env.DB.prepare('INSERT INTO cards (id, deck_id, sort_order, word, meaning, example_sentence, example_translation, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(generateId(), deckId, i + 1, card.word || '', card.meaning || '', card.example_sentence || '', card.example_translation || '', card.emoji || '')
+    return c.env.DB.prepare('INSERT INTO cards (id, deck_id, sort_order, word, meaning, syntax, example_sentence, example_translation, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(generateId(), deckId, i + 1, card.word || '', card.meaning || '', card.syntax || '', card.example_sentence || '', card.example_translation || '', card.emoji || '')
   })
   
   // Batch in groups of 50 to avoid limits
@@ -223,15 +223,15 @@ app.post('/api/decks/:id/cards', async (c) => {
   const deck: any = await c.env.DB.prepare('SELECT * FROM decks WHERE id = ? AND user_id = ?').bind(deckId, userId).first()
   if (!deck) return c.json({ error: 'Deck not found or not authorized' }, 404)
   
-  const { word, meaning, example_sentence, example_translation, emoji } = await c.req.json()
+  const { word, meaning, syntax, example_sentence, example_translation, emoji } = await c.req.json()
   if (!word || !meaning) return c.json({ error: 'Word and meaning required' }, 400)
   
   const maxOrder: any = await c.env.DB.prepare('SELECT MAX(sort_order) as mx FROM cards WHERE deck_id = ?').bind(deckId).first()
   const cardId = generateId()
   
   await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO cards (id, deck_id, sort_order, word, meaning, example_sentence, example_translation, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(cardId, deckId, (maxOrder?.mx || 0) + 1, word, meaning, example_sentence || '', example_translation || '', emoji || ''),
+    c.env.DB.prepare('INSERT INTO cards (id, deck_id, sort_order, word, meaning, syntax, example_sentence, example_translation, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(cardId, deckId, (maxOrder?.mx || 0) + 1, word, meaning, syntax || '', example_sentence || '', example_translation || '', emoji || ''),
     c.env.DB.prepare("UPDATE decks SET card_count = card_count + 1, updated_at = datetime('now') WHERE id = ?").bind(deckId)
   ])
   
@@ -245,9 +245,9 @@ app.put('/api/cards/:id', async (c) => {
   const card: any = await c.env.DB.prepare('SELECT c.*, d.user_id FROM cards c JOIN decks d ON c.deck_id = d.id WHERE c.id = ?').bind(cardId).first()
   if (!card || card.user_id !== userId) return c.json({ error: 'Card not found or not authorized' }, 404)
   
-  const { word, meaning, example_sentence, example_translation, emoji } = await c.req.json()
-  await c.env.DB.prepare('UPDATE cards SET word = COALESCE(?, word), meaning = COALESCE(?, meaning), example_sentence = COALESCE(?, example_sentence), example_translation = COALESCE(?, example_translation), emoji = COALESCE(?, emoji) WHERE id = ?')
-    .bind(word || null, meaning || null, example_sentence !== undefined ? example_sentence : null, example_translation !== undefined ? example_translation : null, emoji !== undefined ? emoji : null, cardId).run()
+  const { word, meaning, syntax, example_sentence, example_translation, emoji } = await c.req.json()
+  await c.env.DB.prepare('UPDATE cards SET word = COALESCE(?, word), meaning = COALESCE(?, meaning), syntax = COALESCE(?, syntax), example_sentence = COALESCE(?, example_sentence), example_translation = COALESCE(?, example_translation), emoji = COALESCE(?, emoji) WHERE id = ?')
+    .bind(word || null, meaning || null, syntax !== undefined ? syntax : null, example_sentence !== undefined ? example_sentence : null, example_translation !== undefined ? example_translation : null, emoji !== undefined ? emoji : null, cardId).run()
   
   return c.json({ success: true })
 })
